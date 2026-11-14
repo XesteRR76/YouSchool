@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">YouSchool</string>
+    <string name="nav_schedule">Расписание</string>
+    <string name="nav_grades">Оценки</string>
+    <string name="nav_homework">Домашка</string>
+    <string name="nav_profile">Профиль</string>
+</resources>

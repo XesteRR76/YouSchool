@@ -1,0 +1,62 @@
+# YouSchool 🎓
+> Современный, быстрый и открытый неофициальный клиент для электронного дневника **eSchool** (`eschool.center`).
+
+![Android](https://img.shields.io/badge/Platform-Android-green.svg)
+![Design](https://img.shields.io/badge/Design-Material%20You%20(Material%203)-blue.svg)
+![Architecture](https://img.shields.io/badge/Architecture-Offline--First%20(Room)-orange.svg)
+![License](https://img.shields.io/badge/License-GPLv3%20%2F%20MIT-brightgreen.svg)
+
+---
+
+## 💡 О проекте
+
+Официальное приложение `eSchool` («Электронная школа», разработчик ООО «ИТ-Стратегия») является закрытым проприетарным софтом с устаревшим дизайном и медленной загрузкой экранов.
+
+**YouSchool** — это полностью открытая альтернатива, созданная для максимального удобства учеников и родителей:
+* 🎨 **Material You (Material 3)**: Нативная динамическая палитра цветов **Monet**, адаптирующаяся под обои устройства (Android 12+), плавная анимация 120 FPS.
+* ⚡ **Мгновенный Offline-First**: Расписание, оценки и домашние задания кэшируются в локальной базе данных **Room (SQLite)**. Приложение открывается за **0 мс** даже в лифте или метро без интернета. Фоновое обновление происходит незаметно (*Stale-While-Revalidate*).
+* 📅 **Интерактивное расписание**: Карусель дней недели вверху экрана с поддержкой свайпов влево/вправо (`HorizontalPager`) и мгновенным возвратом к «Сегодня».
+* 📊 **Умная аналитика оценок**: Автоматический расчет средневзвешенного балла с учетом веса каждой работы и калькулятор «Сколько пятерок нужно получить до четвертной 5».
+* ✅ **Интерактивное ДЗ**: Быстрые чекбоксы для отметки выполненных уроков с сохранением статуса прямо на устройстве.
+* 🔒 **Безопасность**: Учетные данные хранятся локально в **Android Keystore / EncryptedSharedPreferences**, пароли передаются только в виде криптографического SHA-256 хэша.
+
+---
+
+## 🛠 Технологический стек
+
+* **Язык**: Kotlin 2.0
+* **UI**: Jetpack Compose + Material 3 (Material You)
+* **Навигация**: Jetpack Navigation Compose
+* **База данных**: Room Database (SQLite) + Kotlin Flow
+* **Сеть**: OkHttp 4 + Kotlinx.Serialization
+* **Безопасность**: AndroidX Security Crypto (EncryptedSharedPreferences)
+
+---
+
+## 📖 Спецификация API
+
+Полная спецификация реверс-инжиниринга сетевого протокола eSchool находится в файле:
+👉 [docs/api_spec.md](docs/api_spec.md)
+
+---
+
+## 🚀 Сборка проекта
+
+### Требования
+* JDK 17+
+* Android SDK (API 35, Build-Tools 35+)
+
+### Команды
+```bash
+# Запуск Unit-тестов
+./gradlew test
+
+# Сборка Debug APK
+./gradlew assembleDebug
+```
+Собранный APK будет находиться в `app/build/outputs/apk/debug/app-debug.apk`.
+
+---
+
+## 📄 Лицензия
+Открытое ПО под лицензией GPLv3 / MIT.

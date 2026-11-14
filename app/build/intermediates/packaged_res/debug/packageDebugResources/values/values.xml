@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#1C1B1F</color>
+    <string name="app_name">YouSchool</string>
+    <string name="nav_grades">Оценки</string>
+    <string name="nav_homework">Домашка</string>
+    <string name="nav_profile">Профиль</string>
+    <string name="nav_schedule">Расписание</string>
+    <style name="Theme.YouSchool" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>
