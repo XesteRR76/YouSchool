@@ -760,6 +760,132 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // 5. Вес оценок
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.large,
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.Numbers, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(text = "Вес оценок", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Live preview row
+                    Surface(
+                        shape = MaterialTheme.shapes.medium,
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                text = "Превью в расписании и дневнике:",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceAround,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    GradeBadge(mark = "5", weight = 1.0)
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text("вес 1.0", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                                }
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    GradeBadge(mark = "5", weight = 1.5)
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text("вес 1.5", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                                }
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    GradeBadge(mark = "4", weight = 2.0)
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text("вес 2.0", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                                }
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    GradeBadge(mark = "5", weight = 3.0)
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text("вес 3.0", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Switch showGradeWeights
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Показывать вес у оценок",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "Отображать коэффициент веса рядом с баллом (например: 5² или 5₂)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Switch(
+                            checked = themeSettings.showGradeWeights,
+                            onCheckedChange = { show ->
+                                haptic.click()
+                                themeManager.setShowGradeWeights(show)
+                            }
+                        )
+                    }
+
+                    if (themeSettings.showGradeWeights) {
+                        Spacer(modifier = Modifier.height(14.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Text(
+                            text = "Положение индекса веса",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            GradeWeightPosition.values().forEach { pos ->
+                                val isSelected = themeSettings.gradeWeightPosition == pos
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = {
+                                        haptic.tick()
+                                        themeManager.setGradeWeightPosition(pos)
+                                    },
+                                    label = { Text("${pos.title} (${pos.example})") },
+                                    leadingIcon = if (isSelected) {
+                                        { Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(14.dp)) }
+                                    } else null,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             // 4. Повторить онбординг
             OutlinedButton(
                 onClick = {

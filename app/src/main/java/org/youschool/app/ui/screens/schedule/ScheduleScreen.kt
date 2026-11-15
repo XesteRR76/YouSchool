@@ -801,7 +801,7 @@ fun GradeBadge(
     mark: String,
     weight: Double? = null,
     modifier: Modifier = Modifier,
-    showWeightSuperscript: Boolean = false,
+    showWeightSuperscript: Boolean = true,
     isCompact: Boolean = false,
     onClick: (() -> Unit)? = null
 ) {
@@ -810,14 +810,19 @@ fun GradeBadge(
         GradeColorCalculator.calculateGradeColor(mark, weight, themeSettings)
     }
 
-    val displayText = remember(mark, weight, showWeightSuperscript, isCompact) {
-        if (showWeightSuperscript && weight != null && weight != 1.0) {
+    val displayText = remember(mark, weight, showWeightSuperscript, isCompact, themeSettings.showGradeWeights, themeSettings.gradeWeightPosition) {
+        if (themeSettings.showGradeWeights && showWeightSuperscript && weight != null && weight != 1.0) {
             val weightStr = if (weight % 1.0 == 0.0) weight.toInt().toString() else "$weight"
+            val shift = if (themeSettings.gradeWeightPosition == GradeWeightPosition.SUBSCRIPT) {
+                BaselineShift.Subscript
+            } else {
+                BaselineShift.Superscript
+            }
             buildAnnotatedString {
                 append(mark)
                 withStyle(
                     SpanStyle(
-                        baselineShift = BaselineShift.Superscript,
+                        baselineShift = shift,
                         fontSize = if (isCompact) 8.sp else 10.sp,
                         fontWeight = FontWeight.ExtraBold
                     )

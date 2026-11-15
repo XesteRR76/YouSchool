@@ -428,14 +428,14 @@ private fun StepGradeColorMode(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = "Окрашивание оценок",
+            text = "Окрашивание и веса оценок",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center
         )
 
         Text(
-            text = "Настройте, как оценки отображаются в дневнике и расписании",
+            text = "Настройте цветовую схему и отображение коэффициентов веса оценок",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.outline,
             textAlign = TextAlign.Center,
@@ -559,6 +559,86 @@ private fun StepGradeColorMode(
                                 text = mode.subtitle,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.outline
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Text(
+            text = "Вес оценок",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Surface(
+            shape = MaterialTheme.shapes.medium,
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Показывать вес у оценок",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "Отображать коэффициент веса рядом с баллом (например: 5² или 5₂)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Switch(
+                        checked = settings.showGradeWeights,
+                        onCheckedChange = { show ->
+                            haptic.click()
+                            themeManager.setShowGradeWeights(show)
+                        }
+                    )
+                }
+
+                if (settings.showGradeWeights) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text(
+                        text = "Позиция индекса веса",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        GradeWeightPosition.values().forEach { pos ->
+                            val isSelected = settings.gradeWeightPosition == pos
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = {
+                                    haptic.tick()
+                                    themeManager.setGradeWeightPosition(pos)
+                                },
+                                label = { Text("${pos.title} (${pos.example})") },
+                                leadingIcon = if (isSelected) {
+                                    { Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(14.dp)) }
+                                } else null,
+                                modifier = Modifier.weight(1f)
                             )
                         }
                     }

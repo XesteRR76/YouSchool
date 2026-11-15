@@ -41,6 +41,11 @@ enum class GradeColorMode(val title: String, val subtitle: String) {
     BY_WEIGHT_GRADIENT("Градиент веса", "Цвет отражает вес работы между двумя цветами по логарифмической шкале")
 }
 
+enum class GradeWeightPosition(val title: String, val example: String) {
+    SUPERSCRIPT("Верхний индекс", "5²"),
+    SUBSCRIPT("Нижний индекс", "5₂")
+}
+
 data class GradeCustomColors(
     val color5: Color = Grade5Color,
     val color4: Color = Grade4Color,
@@ -78,6 +83,8 @@ data class ThemeSettings(
     val gradeColorMode: GradeColorMode = GradeColorMode.BY_VALUE,
     val gradeCustomColors: GradeCustomColors = GradeCustomColors(),
     val weightGradientSettings: WeightGradientSettings = WeightGradientSettings(),
+    val showGradeWeights: Boolean = true,
+    val gradeWeightPosition: GradeWeightPosition = GradeWeightPosition.SUPERSCRIPT,
     val hasCompletedOnboarding: Boolean = false
 )
 
@@ -188,6 +195,9 @@ class ThemeManager(private val context: Context) {
         )
 
         val bottomOffset = prefs.getInt("nav_bar_bottom_offset", 16)
+        val showWeights = prefs.getBoolean("show_grade_weights", true)
+        val weightPosName = prefs.getString("grade_weight_position", GradeWeightPosition.SUPERSCRIPT.name) ?: GradeWeightPosition.SUPERSCRIPT.name
+        val weightPos = try { GradeWeightPosition.valueOf(weightPosName) } catch (e: Exception) { GradeWeightPosition.SUPERSCRIPT }
 
         return ThemeSettings(
             themeMode = mode,
@@ -199,6 +209,8 @@ class ThemeManager(private val context: Context) {
             gradeColorMode = gradeMode,
             gradeCustomColors = customColors,
             weightGradientSettings = gradientSettings,
+            showGradeWeights = showWeights,
+            gradeWeightPosition = weightPos,
             hasCompletedOnboarding = onboarding
         )
     }
@@ -334,6 +346,16 @@ class ThemeManager(private val context: Context) {
             maxIntensity = maxIntensity
         )
         _themeSettings.value = _themeSettings.value.copy(weightGradientSettings = updated)
+    }
+
+    fun setShowGradeWeights(show: Boolean) {
+        prefs.edit().putBoolean("show_grade_weights", show).apply()
+        _themeSettings.value = _themeSettings.value.copy(showGradeWeights = show)
+    }
+
+    fun setGradeWeightPosition(position: GradeWeightPosition) {
+        prefs.edit().putString("grade_weight_position", position.name).apply()
+        _themeSettings.value = _themeSettings.value.copy(gradeWeightPosition = position)
     }
 
     fun setOnboardingCompleted(completed: Boolean) {
