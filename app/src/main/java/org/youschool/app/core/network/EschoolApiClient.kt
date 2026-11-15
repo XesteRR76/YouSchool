@@ -4,6 +4,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.RequestBody
+import org.youschool.app.domain.model.*
+import kotlinx.coroutines.CancellationException
 import okhttp3.FormBody
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
@@ -33,6 +37,8 @@ class EschoolApiClient(private val authManager: AuthManager) {
             level = HttpLoggingInterceptor.Level.BASIC
         })
         .build()
+
+    private val chatClient = client.newBuilder().retryOnConnectionFailure(false).build()
 
     private val baseUrl = "https://app.eschool.center/ec-server"
 
@@ -177,6 +183,86 @@ class EschoolApiClient(private val authManager: AuthManager) {
         }
         firstAttempt
     }
+
+    private suspend fun chatRequest(
+        path: String,
+        params: Map<String, String> = emptyMap(),
+        method: String = "GET",
+        body: RequestBody? = null
+    ): Result<String> = executeWithAutoAuth { sessionId, route ->
+        try {
+            val url = "$baseUrl/$path".toHttpUrl().newBuilder().apply {
+                params.forEach { (key, value) -> addQueryParameter(key, value) }
+            }.build()
+            val request = Request.Builder().url(url)
+                .header("Cookie", buildCookieHeader(sessionId, route))
+                .method(method, body).build()
+            chatClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    Result.failure(IOException("Ошибка сообщений: HTTP ${response.code}"))
+                } else {
+                    Result.success(response.body?.string() ?: throw IOException("Пустой ответ сервера"))
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getMessageThreads(before: Long?): Result<List<MessageThread>> =
+        chatRequest("chat/threads", buildMap {
+            put("row", "1"); put("rowsCount", "25")
+            put("newOnly", "false"); put("starredOnly", "false")
+            before?.let { put("msgNum", it.toString()) }
+        }).mapCatching { json.decodeFromString<List<MessageThread>>(it) }
+
+    suspend fun getMessageThread(id: Long): Result<MessageThread> =
+        chatRequest("chat/thread", mapOf("threadId" to id.toString()))
+            .mapCatching { json.decodeFromString<MessageThread>(it) }
+
+    suspend fun getMessages(id: Long, before: Long?): Result<List<SchoolMessage>> =
+        chatRequest("chat/messages", buildMap {
+            put("threadId", id.toString()); put("rowStart", "1"); put("rowsCount", "25")
+            put("getNew", "false"); put("isSearch", "false")
+            before?.let { put("msgStart", it.toString()) }
+        }, "PUT", "{}".toRequestBody("application/json".toMediaType()))
+            .mapCatching { json.decodeFromString<List<SchoolMessage>>(it) }
+
+    suspend fun getMessageRecipients(): Result<List<MessageRecipient>> =
+        chatRequest("usr/getUserListSearch").mapCatching {
+            json.decodeFromString<List<MessageRecipient>>(it).filterNot { person -> person.out }
+        }
+
+    suspend fun getNoReplyId(): Result<Long> = chatRequest("chat/noreply").mapCatching { it.trim().toLong() }
+
+    suspend fun createPrivateThread(recipientId: Long): Result<Long> {
+        val existing = chatRequest("chat/privateThreads").mapCatching { json.decodeFromString<Map<String, Long>>(it) }
+        if (existing.isFailure) return Result.failure(existing.exceptionOrNull()!!)
+        existing.getOrThrow()[recipientId.toString()]?.let { return Result.success(it) }
+        return chatRequest("chat/saveThread", method = "PUT", body =
+            """{"isGroup":false,"isAllowReplay":2,"interlocutor":$recipientId}"""
+                .toRequestBody("application/json".toMediaType()))
+            .mapCatching { it.trim().toLong().also { id -> check(id > 0) { "Не удалось открыть переписку" } } }
+    }
+
+    suspend fun sendMessage(threadId: Long, text: String, uid: String): Result<Unit> {
+        if (text.isBlank()) return Result.failure(IllegalArgumentException("Введите текст сообщения"))
+        // eSchool expects escaped HTML even for a plain text message.
+        val escaped = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            .replace("\"", "&quot;").replace("'", "&#39;")
+        val body = MultipartBody.Builder().setType(MultipartBody.FORM)
+            .addFormDataPart("threadId", threadId.toString())
+            .addFormDataPart("msgText", escaped)
+            .addFormDataPart("msgUID", uid).build()
+        return chatRequest("chat/sendNew", method = "POST", body = body).mapCatching {
+            json.decodeFromString<SendMessageResponse>(it).requireSuccess()
+        }
+    }
+
+    suspend fun markMessageRead(id: Long): Result<Unit> =
+        chatRequest("chat/readed", mapOf("msgId" to id.toString())).map { Unit }
 
     suspend fun getDiary(userId: Long, startMs: Long, endMs: Long): Result<DiaryResponse> {
         return executeWithAutoAuth { sessionId, route ->

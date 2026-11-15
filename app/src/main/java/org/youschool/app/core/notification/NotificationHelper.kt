@@ -21,6 +21,8 @@ object NotificationHelper {
     const val CHANNEL_ID = "grades_channel"
     private const val CHANNEL_NAME = "Новые оценки"
     private const val NOTIFICATION_ID = 2001
+    const val HOMEWORK_CHANNEL_ID = "homework_reminders"
+    private const val HOMEWORK_NOTIFICATION_ID = 2002
 
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -35,7 +37,44 @@ object NotificationHelper {
             }
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(channel)
+            manager.createNotificationChannel(NotificationChannel(
+                HOMEWORK_CHANNEL_ID, "Напоминания о ДЗ", NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Тихое напоминание о невыполненных заданиях на сегодня"
+                setSound(null, null)
+                enableVibration(false)
+                setShowBadge(false)
+            })
         }
+    }
+
+    fun showHomeworkReminder(context: Context, count: Int): Boolean {
+        if (count <= 0 || !NotificationManagerCompat.from(context).areNotificationsEnabled()) return false
+        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context,
+                android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return false
+        createNotificationChannel(context)
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (manager.getNotificationChannel(HOMEWORK_CHANNEL_ID)?.importance == NotificationManager.IMPORTANCE_NONE) return false
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("navigate_to", "homework")
+        }
+        val pending = PendingIntent.getActivity(context, 1002, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        return try {
+            NotificationManagerCompat.from(context).notify(HOMEWORK_NOTIFICATION_ID,
+                NotificationCompat.Builder(context, HOMEWORK_CHANNEL_ID)
+                    .setSmallIcon(R.drawable.ic_launcher_monochrome)
+                    .setContentTitle("Домашние задания на сегодня")
+                    .setContentText("Невыполненных заданий: $count. Откройте список, когда будет удобно.")
+                    .setContentIntent(pending).setAutoCancel(true).setSilent(true)
+                    .setPriority(NotificationCompat.PRIORITY_LOW).build())
+            true
+        } catch (e: SecurityException) { false }
+    }
+
+    fun cancelAll(context: Context) {
+        NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
+        NotificationManagerCompat.from(context).cancel(HOMEWORK_NOTIFICATION_ID)
     }
 
     fun showNewGradesNotification(context: Context, newGrades: List<GradeEntity>) {

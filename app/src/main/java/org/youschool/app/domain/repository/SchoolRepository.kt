@@ -1,6 +1,7 @@
 package org.youschool.app.domain.repository
 
 import java.io.File
+import org.youschool.app.domain.model.*
 import kotlinx.coroutines.flow.Flow
 import org.youschool.app.domain.model.Grade
 import org.youschool.app.domain.model.HomeworkResultFile
@@ -9,6 +10,15 @@ import org.youschool.app.domain.model.SubjectAverage
 import org.youschool.app.domain.model.UserProfile
 
 interface SchoolRepository {
+    suspend fun getMessageThreads(before: Long? = null): Result<List<MessageThread>>
+    suspend fun getMessageThread(id: Long): Result<MessageThread>
+    suspend fun getMessages(id: Long, before: Long? = null): Result<List<SchoolMessage>>
+    suspend fun getMessageRecipients(): Result<List<MessageRecipient>>
+    suspend fun getNoReplyId(): Result<Long>
+    suspend fun createPrivateThread(recipientId: Long): Result<Long>
+    suspend fun sendMessage(threadId: Long, text: String, uid: String): Result<Unit>
+    suspend fun markMessageRead(id: Long): Result<Unit>
+
     fun getLessonsForDay(dateMillis: Long): Flow<List<Lesson>>
     fun getAllHomeworks(): Flow<List<Lesson>>
     fun getUpcomingHomeworks(): Flow<List<Lesson>>

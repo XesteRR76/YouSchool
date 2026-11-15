@@ -21,6 +21,8 @@ import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,6 +36,8 @@ import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
 import org.youschool.app.core.update.AppRelease
 import org.youschool.app.core.update.AppUpdateChecker
+import org.youschool.app.ui.navigation.Screen
+import org.youschool.app.ui.navigation.BottomBarConfig
 import org.youschool.app.domain.repository.SchoolRepository
 import org.youschool.app.ui.screens.schedule.GradeBadge
 import org.youschool.app.ui.theme.*
@@ -45,6 +49,7 @@ fun ProfileScreen(
     repository: SchoolRepository,
     themeManager: ThemeManager,
     onLogout: () -> Unit,
+    onNavigate: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val profile = repository.getUserProfile()
@@ -370,6 +375,42 @@ fun ProfileScreen(
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     Spacer(modifier = Modifier.height(14.dp))
 
+                    Text("Пункты нижней панели", style = MaterialTheme.typography.titleMedium)
+                    Text("От 2 до 5 пунктов. Профиль всегда доступен.", style = MaterialTheme.typography.bodySmall)
+                    val routes = themeSettings.bottomBarRoutes
+                    val orderedScreens = routes.mapNotNull { route -> Screen.allMainScreens.find { it.route == route } } +
+                        Screen.allMainScreens.filter { it.route !in routes }
+                    orderedScreens.forEach { screen ->
+                        val index = routes.indexOf(screen.route)
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                modifier = Modifier.semantics { contentDescription = screen.title },
+                                checked = index >= 0,
+                                enabled = screen != Screen.Profile && (index < 0 || routes.size > 2),
+                                onCheckedChange = { checked ->
+                                    themeManager.setBottomBarRoutes(if (checked) routes + screen.route else routes - screen.route)
+                                }
+                            )
+                            Text(screen.title, Modifier.weight(1f))
+                            if (index >= 0) {
+                                IconButton(enabled = index > 0, onClick = {
+                                    val updated = routes.toMutableList()
+                                    java.util.Collections.swap(updated, index, index - 1)
+                                    themeManager.setBottomBarRoutes(updated)
+                                }) { Icon(Icons.Rounded.KeyboardArrowUp, "Выше: ${screen.title}") }
+                                IconButton(enabled = index < routes.lastIndex, onClick = {
+                                    val updated = routes.toMutableList()
+                                    java.util.Collections.swap(updated, index, index + 1)
+                                    themeManager.setBottomBarRoutes(updated)
+                                }) { Icon(Icons.Rounded.KeyboardArrowDown, "Ниже: ${screen.title}") }
+                            } else {
+                                TextButton(onClick = { onNavigate(screen.route) }) { Text("Открыть") }
+                            }
+                        }
+                    }
+                    TextButton(onClick = { themeManager.setBottomBarRoutes(BottomBarConfig.defaults) }) { Text("Сбросить панель") }
+                    Spacer(Modifier.height(16.dp))
+
                     // Navigation Bar Style
                     Text(text = "Стиль нижней панели навигации", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.outline)
                     Spacer(modifier = Modifier.height(8.dp))
@@ -493,18 +534,19 @@ fun ProfileScreen(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Присылать уведомления о новых оценках",
+                                text = "Разрешить уведомления",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                text = "Периодически проверять электронный журнал в фоне и присылать уведомление сразу при появлении новых оценок",
+                                text = "Выберите типы уведомлений ниже. Android может задерживать фоновую проверку.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.outline
                             )
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Switch(
+                            modifier = Modifier.semantics { contentDescription = "Разрешить уведомления" },
                             checked = themeSettings.areNotificationsEnabled,
                             onCheckedChange = { enable ->
                                 if (enable) {
@@ -530,6 +572,28 @@ fun ProfileScreen(
                             }
                         )
                     }
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Новые оценки", Modifier.weight(1f))
+                        Switch(modifier = Modifier.semantics { contentDescription = "Новые оценки" },
+                            checked = themeSettings.gradeNotificationsEnabled,
+                            enabled = themeSettings.areNotificationsEnabled,
+                            onCheckedChange = { themeManager.setGradeNotificationsEnabled(it) })
+                    }
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Напоминания о ДЗ")
+                            Text("Один раз в день сдачи, без звука и вибрации", style = MaterialTheme.typography.bodySmall)
+                        }
+                        Switch(modifier = Modifier.semantics { contentDescription = "Напоминания о ДЗ" },
+                            checked = themeSettings.homeworkNotificationsEnabled,
+                            enabled = themeSettings.areNotificationsEnabled,
+                            onCheckedChange = { themeManager.setHomeworkNotificationsEnabled(it) })
+                    }
+                    val minute = themeSettings.homeworkReminderMinute
+                    TextButton(enabled = themeSettings.areNotificationsEnabled && themeSettings.homeworkNotificationsEnabled, onClick = {
+                        android.app.TimePickerDialog(context, { _, hour, min -> themeManager.setHomeworkReminderMinute(hour * 60 + min) },
+                            minute / 60, minute % 60, true).show()
+                    }) { Text("Напоминать около %02d:%02d".format(minute / 60, minute % 60)) }
                 }
             }
 

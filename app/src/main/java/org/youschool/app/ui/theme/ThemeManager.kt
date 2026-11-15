@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlin.math.ln
+import org.youschool.app.ui.navigation.BottomBarConfig
 
 val LocalBottomBarPadding = compositionLocalOf<Dp> { 0.dp }
 
@@ -78,8 +79,12 @@ data class ThemeSettings(
     val colorPalette: AppColorPalette = AppColorPalette.MONET,
     val isHapticFeedbackEnabled: Boolean = true,
     val areNotificationsEnabled: Boolean = true,
+    val gradeNotificationsEnabled: Boolean = true,
+    val homeworkNotificationsEnabled: Boolean = true,
+    val homeworkReminderMinute: Int = 8 * 60,
     val navBarStyle: NavigationBarStyle = NavigationBarStyle.STANDARD,
     val navBarBottomOffsetDp: Int = 16,
+    val bottomBarRoutes: List<String> = BottomBarConfig.defaults,
     val gradeColorMode: GradeColorMode = GradeColorMode.BY_VALUE,
     val gradeCustomColors: GradeCustomColors = GradeCustomColors(),
     val weightGradientSettings: WeightGradientSettings = WeightGradientSettings(),
@@ -206,7 +211,11 @@ class ThemeManager(private val context: Context) {
             colorPalette = palette,
             isHapticFeedbackEnabled = haptic,
             areNotificationsEnabled = notifications,
+            gradeNotificationsEnabled = prefs.getBoolean("grade_notifications_enabled", true),
+            homeworkNotificationsEnabled = prefs.getBoolean("homework_notifications_enabled", true),
+            homeworkReminderMinute = prefs.getInt("homework_reminder_minute", 8 * 60).coerceIn(0, 1439),
             navBarStyle = navStyle,
+            bottomBarRoutes = BottomBarConfig.normalize(prefs.getString("bottom_bar_routes", null)?.split(",") ?: BottomBarConfig.defaults),
             navBarBottomOffsetDp = bottomOffset,
             gradeColorMode = gradeMode,
             gradeCustomColors = customColors,
@@ -271,9 +280,33 @@ class ThemeManager(private val context: Context) {
         }
     }
 
+    fun setGradeNotificationsEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("grade_notifications_enabled", enabled).apply()
+        _themeSettings.value = _themeSettings.value.copy(gradeNotificationsEnabled = enabled)
+        org.youschool.app.core.notification.GradesNotificationScheduler.schedule(context)
+    }
+
+    fun setHomeworkNotificationsEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("homework_notifications_enabled", enabled).apply()
+        _themeSettings.value = _themeSettings.value.copy(homeworkNotificationsEnabled = enabled)
+        org.youschool.app.core.notification.GradesNotificationScheduler.schedule(context)
+    }
+
+    fun setHomeworkReminderMinute(minute: Int) {
+        val value = minute.coerceIn(0, 1439)
+        prefs.edit().putInt("homework_reminder_minute", value).apply()
+        _themeSettings.value = _themeSettings.value.copy(homeworkReminderMinute = value)
+    }
+
     fun setNavigationBarStyle(style: NavigationBarStyle) {
         prefs.edit().putString("nav_bar_style", style.name).apply()
         _themeSettings.value = _themeSettings.value.copy(navBarStyle = style)
+    }
+
+    fun setBottomBarRoutes(routes: List<String>) {
+        val normalized = BottomBarConfig.normalize(routes)
+        prefs.edit().putString("bottom_bar_routes", normalized.joinToString(",")).apply()
+        _themeSettings.value = _themeSettings.value.copy(bottomBarRoutes = normalized)
     }
 
     fun setNavBarBottomOffset(offsetDp: Int) {
