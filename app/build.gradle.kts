@@ -9,7 +9,12 @@ plugins {
 android {
     namespace = "org.youschool.app"
     compileSdk = 35
-    buildToolsVersion = "37.0.0"
+
+    val hasLocal37 = file("/opt/android-sdk/build-tools/37.0.0").exists() ||
+        file("${System.getenv("ANDROID_HOME")}/build-tools/37.0.0").exists()
+    if (hasLocal37 && System.getenv("CI") != "true") {
+        buildToolsVersion = "37.0.0"
+    }
 
     defaultConfig {
         applicationId = "org.youschool.app"
@@ -22,6 +27,10 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+    }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
     }
 
     val keystoreFile = file("release.jks")
