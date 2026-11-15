@@ -435,7 +435,7 @@ private fun StepGradeColorMode(
         )
 
         Text(
-            text = "Настройте цветовую схему и отображение коэффициентов веса оценок",
+            text = "Настройте цветовую схему и отображение веса оценок",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.outline,
             textAlign = TextAlign.Center,
@@ -462,29 +462,13 @@ private fun StepGradeColorMode(
                 Spacer(modifier = Modifier.height(10.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.SpaceAround,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        GradeBadge(mark = "5", weight = 1.0)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("Вес 1.0", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                    }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        GradeBadge(mark = "4", weight = 1.5)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("Вес 1.5", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                    }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        GradeBadge(mark = "5", weight = 3.0)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("Вес 3.0", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                    }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        GradeBadge(mark = "3", weight = 0.5)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("Вес 0.5", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                    }
+                    GradeBadge(mark = "5", weight = 1.0)
+                    GradeBadge(mark = "4", weight = 1.5)
+                    GradeBadge(mark = "5", weight = 3.0)
+                    GradeBadge(mark = "3", weight = 0.5)
                 }
 
                 if (settings.gradeColorMode == GradeColorMode.BY_WEIGHT_GRADIENT) {
@@ -595,7 +579,7 @@ private fun StepGradeColorMode(
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
-                            text = "Отображать коэффициент веса рядом с баллом (например: 5² или 5₂)",
+                            text = "Отображать вес рядом с баллом (например: 5² или 5₂)",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.outline
                         )

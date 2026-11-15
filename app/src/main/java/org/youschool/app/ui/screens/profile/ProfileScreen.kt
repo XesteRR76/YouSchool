@@ -794,26 +794,10 @@ fun ProfileScreen(
                                 horizontalArrangement = Arrangement.SpaceAround,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    GradeBadge(mark = "5", weight = 1.0)
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text("вес 1.0", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                                }
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    GradeBadge(mark = "5", weight = 1.5)
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text("вес 1.5", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                                }
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    GradeBadge(mark = "4", weight = 2.0)
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text("вес 2.0", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                                }
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    GradeBadge(mark = "5", weight = 3.0)
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text("вес 3.0", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                                }
+                                GradeBadge(mark = "5", weight = 1.0)
+                                GradeBadge(mark = "5", weight = 1.5)
+                                GradeBadge(mark = "4", weight = 2.0)
+                                GradeBadge(mark = "5", weight = 3.0)
                             }
                         }
                     }
@@ -833,7 +817,7 @@ fun ProfileScreen(
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                text = "Отображать коэффициент веса рядом с баллом (например: 5² или 5₂)",
+                                text = "Отображать вес рядом с баллом (например: 5² или 5₂)",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.outline
                             )

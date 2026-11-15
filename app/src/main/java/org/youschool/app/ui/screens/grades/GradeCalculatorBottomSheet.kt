@@ -365,7 +365,7 @@ fun GradeCalculatorBottomSheet(
 
                         // 2. Original Weight Selection (0.3, 0.5, 1.0, 1.5, 2.0)
                         Text(
-                            text = "Коэффициент (вес):",
+                            text = "Вес оценки:",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -411,7 +411,7 @@ fun GradeCalculatorBottomSheet(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = if (isCustomWeight) "Использовать стандартный (0.3..2.0)" else "Свой вес (коэффициент)...",
+                                    text = if (isCustomWeight) "Использовать стандартный (0.3..2.0)" else "Свой вес...",
                                     style = MaterialTheme.typography.labelMedium
                                 )
                             }
@@ -428,7 +428,7 @@ fun GradeCalculatorBottomSheet(
                                         selectedWeight = parsed
                                     }
                                 },
-                                label = { Text("Свой коэффициент веса") },
+                                label = { Text("Свой вес") },
                                 placeholder = { Text("например 0.8 или 2.5") },
                                 supportingText = {
                                     if (parsedWeight != null && parsedWeight > 0.0) {
