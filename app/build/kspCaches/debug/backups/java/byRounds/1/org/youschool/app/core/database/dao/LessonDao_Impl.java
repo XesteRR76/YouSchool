@@ -1,10 +1,13 @@
 package org.youschool.app.core.database.dao;
 
 import android.database.Cursor;
+import android.os.CancellationSignal;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.room.CoroutinesRoom;
 import androidx.room.EntityInsertionAdapter;
 import androidx.room.RoomDatabase;
+import androidx.room.RoomDatabaseKt;
 import androidx.room.RoomSQLiteQuery;
 import androidx.room.SharedSQLiteStatement;
 import androidx.room.util.CursorUtil;
@@ -43,7 +46,7 @@ public final class LessonDao_Impl implements LessonDao {
       @Override
       @NonNull
       protected String createQuery() {
-        return "INSERT OR REPLACE INTO `lessons` (`id`,`dateMillis`,`numInDay`,`subjectId`,`subjectName`,`subjectShort`,`topic`,`teacherName`,`homeworkText`,`homeworkFilesJson`,`gradeValue`,`gradeWeight`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)";
+        return "INSERT OR REPLACE INTO `lessons` (`id`,`dateMillis`,`numInDay`,`subjectId`,`subjectName`,`subjectShort`,`topic`,`teacherName`,`homeworkText`,`homeworkFilesJson`,`gradeValue`,`gradeWeight`,`homeworkPartId`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)";
       }
 
       @Override
@@ -72,6 +75,11 @@ public final class LessonDao_Impl implements LessonDao {
           statement.bindNull(12);
         } else {
           statement.bindLong(12, entity.getGradeWeight());
+        }
+        if (entity.getHomeworkPartId() == null) {
+          statement.bindNull(13);
+        } else {
+          statement.bindLong(13, entity.getHomeworkPartId());
         }
       }
     };
@@ -102,6 +110,12 @@ public final class LessonDao_Impl implements LessonDao {
         }
       }
     }, $completion);
+  }
+
+  @Override
+  public Object replaceLessonsForRange(final long startOfDay, final long endOfDay,
+      final List<LessonEntity> lessons, final Continuation<? super Unit> $completion) {
+    return RoomDatabaseKt.withTransaction(__db, (__cont) -> LessonDao.DefaultImpls.replaceLessonsForRange(LessonDao_Impl.this, startOfDay, endOfDay, lessons, __cont), $completion);
   }
 
   @Override
@@ -158,6 +172,7 @@ public final class LessonDao_Impl implements LessonDao {
           final int _cursorIndexOfHomeworkFilesJson = CursorUtil.getColumnIndexOrThrow(_cursor, "homeworkFilesJson");
           final int _cursorIndexOfGradeValue = CursorUtil.getColumnIndexOrThrow(_cursor, "gradeValue");
           final int _cursorIndexOfGradeWeight = CursorUtil.getColumnIndexOrThrow(_cursor, "gradeWeight");
+          final int _cursorIndexOfHomeworkPartId = CursorUtil.getColumnIndexOrThrow(_cursor, "homeworkPartId");
           final List<LessonEntity> _result = new ArrayList<LessonEntity>(_cursor.getCount());
           while (_cursor.moveToNext()) {
             final LessonEntity _item;
@@ -197,7 +212,13 @@ public final class LessonDao_Impl implements LessonDao {
             } else {
               _tmpGradeWeight = _cursor.getInt(_cursorIndexOfGradeWeight);
             }
-            _item = new LessonEntity(_tmpId,_tmpDateMillis,_tmpNumInDay,_tmpSubjectId,_tmpSubjectName,_tmpSubjectShort,_tmpTopic,_tmpTeacherName,_tmpHomeworkText,_tmpHomeworkFilesJson,_tmpGradeValue,_tmpGradeWeight);
+            final Long _tmpHomeworkPartId;
+            if (_cursor.isNull(_cursorIndexOfHomeworkPartId)) {
+              _tmpHomeworkPartId = null;
+            } else {
+              _tmpHomeworkPartId = _cursor.getLong(_cursorIndexOfHomeworkPartId);
+            }
+            _item = new LessonEntity(_tmpId,_tmpDateMillis,_tmpNumInDay,_tmpSubjectId,_tmpSubjectName,_tmpSubjectShort,_tmpTopic,_tmpTeacherName,_tmpHomeworkText,_tmpHomeworkFilesJson,_tmpGradeValue,_tmpGradeWeight,_tmpHomeworkPartId);
             _result.add(_item);
           }
           return _result;
@@ -211,6 +232,90 @@ public final class LessonDao_Impl implements LessonDao {
         _statement.release();
       }
     });
+  }
+
+  @Override
+  public Object getLessonById(final long lessonId,
+      final Continuation<? super LessonEntity> $completion) {
+    final String _sql = "SELECT * FROM lessons WHERE id = ?";
+    final RoomSQLiteQuery _statement = RoomSQLiteQuery.acquire(_sql, 1);
+    int _argIndex = 1;
+    _statement.bindLong(_argIndex, lessonId);
+    final CancellationSignal _cancellationSignal = DBUtil.createCancellationSignal();
+    return CoroutinesRoom.execute(__db, false, _cancellationSignal, new Callable<LessonEntity>() {
+      @Override
+      @Nullable
+      public LessonEntity call() throws Exception {
+        final Cursor _cursor = DBUtil.query(__db, _statement, false, null);
+        try {
+          final int _cursorIndexOfId = CursorUtil.getColumnIndexOrThrow(_cursor, "id");
+          final int _cursorIndexOfDateMillis = CursorUtil.getColumnIndexOrThrow(_cursor, "dateMillis");
+          final int _cursorIndexOfNumInDay = CursorUtil.getColumnIndexOrThrow(_cursor, "numInDay");
+          final int _cursorIndexOfSubjectId = CursorUtil.getColumnIndexOrThrow(_cursor, "subjectId");
+          final int _cursorIndexOfSubjectName = CursorUtil.getColumnIndexOrThrow(_cursor, "subjectName");
+          final int _cursorIndexOfSubjectShort = CursorUtil.getColumnIndexOrThrow(_cursor, "subjectShort");
+          final int _cursorIndexOfTopic = CursorUtil.getColumnIndexOrThrow(_cursor, "topic");
+          final int _cursorIndexOfTeacherName = CursorUtil.getColumnIndexOrThrow(_cursor, "teacherName");
+          final int _cursorIndexOfHomeworkText = CursorUtil.getColumnIndexOrThrow(_cursor, "homeworkText");
+          final int _cursorIndexOfHomeworkFilesJson = CursorUtil.getColumnIndexOrThrow(_cursor, "homeworkFilesJson");
+          final int _cursorIndexOfGradeValue = CursorUtil.getColumnIndexOrThrow(_cursor, "gradeValue");
+          final int _cursorIndexOfGradeWeight = CursorUtil.getColumnIndexOrThrow(_cursor, "gradeWeight");
+          final int _cursorIndexOfHomeworkPartId = CursorUtil.getColumnIndexOrThrow(_cursor, "homeworkPartId");
+          final LessonEntity _result;
+          if (_cursor.moveToFirst()) {
+            final long _tmpId;
+            _tmpId = _cursor.getLong(_cursorIndexOfId);
+            final long _tmpDateMillis;
+            _tmpDateMillis = _cursor.getLong(_cursorIndexOfDateMillis);
+            final int _tmpNumInDay;
+            _tmpNumInDay = _cursor.getInt(_cursorIndexOfNumInDay);
+            final Long _tmpSubjectId;
+            if (_cursor.isNull(_cursorIndexOfSubjectId)) {
+              _tmpSubjectId = null;
+            } else {
+              _tmpSubjectId = _cursor.getLong(_cursorIndexOfSubjectId);
+            }
+            final String _tmpSubjectName;
+            _tmpSubjectName = _cursor.getString(_cursorIndexOfSubjectName);
+            final String _tmpSubjectShort;
+            _tmpSubjectShort = _cursor.getString(_cursorIndexOfSubjectShort);
+            final String _tmpTopic;
+            _tmpTopic = _cursor.getString(_cursorIndexOfTopic);
+            final String _tmpTeacherName;
+            _tmpTeacherName = _cursor.getString(_cursorIndexOfTeacherName);
+            final String _tmpHomeworkText;
+            _tmpHomeworkText = _cursor.getString(_cursorIndexOfHomeworkText);
+            final String _tmpHomeworkFilesJson;
+            _tmpHomeworkFilesJson = _cursor.getString(_cursorIndexOfHomeworkFilesJson);
+            final String _tmpGradeValue;
+            if (_cursor.isNull(_cursorIndexOfGradeValue)) {
+              _tmpGradeValue = null;
+            } else {
+              _tmpGradeValue = _cursor.getString(_cursorIndexOfGradeValue);
+            }
+            final Integer _tmpGradeWeight;
+            if (_cursor.isNull(_cursorIndexOfGradeWeight)) {
+              _tmpGradeWeight = null;
+            } else {
+              _tmpGradeWeight = _cursor.getInt(_cursorIndexOfGradeWeight);
+            }
+            final Long _tmpHomeworkPartId;
+            if (_cursor.isNull(_cursorIndexOfHomeworkPartId)) {
+              _tmpHomeworkPartId = null;
+            } else {
+              _tmpHomeworkPartId = _cursor.getLong(_cursorIndexOfHomeworkPartId);
+            }
+            _result = new LessonEntity(_tmpId,_tmpDateMillis,_tmpNumInDay,_tmpSubjectId,_tmpSubjectName,_tmpSubjectShort,_tmpTopic,_tmpTeacherName,_tmpHomeworkText,_tmpHomeworkFilesJson,_tmpGradeValue,_tmpGradeWeight,_tmpHomeworkPartId);
+          } else {
+            _result = null;
+          }
+          return _result;
+        } finally {
+          _cursor.close();
+          _statement.release();
+        }
+      }
+    }, $completion);
   }
 
   @Override
@@ -235,6 +340,7 @@ public final class LessonDao_Impl implements LessonDao {
           final int _cursorIndexOfHomeworkFilesJson = CursorUtil.getColumnIndexOrThrow(_cursor, "homeworkFilesJson");
           final int _cursorIndexOfGradeValue = CursorUtil.getColumnIndexOrThrow(_cursor, "gradeValue");
           final int _cursorIndexOfGradeWeight = CursorUtil.getColumnIndexOrThrow(_cursor, "gradeWeight");
+          final int _cursorIndexOfHomeworkPartId = CursorUtil.getColumnIndexOrThrow(_cursor, "homeworkPartId");
           final List<LessonEntity> _result = new ArrayList<LessonEntity>(_cursor.getCount());
           while (_cursor.moveToNext()) {
             final LessonEntity _item;
@@ -274,7 +380,99 @@ public final class LessonDao_Impl implements LessonDao {
             } else {
               _tmpGradeWeight = _cursor.getInt(_cursorIndexOfGradeWeight);
             }
-            _item = new LessonEntity(_tmpId,_tmpDateMillis,_tmpNumInDay,_tmpSubjectId,_tmpSubjectName,_tmpSubjectShort,_tmpTopic,_tmpTeacherName,_tmpHomeworkText,_tmpHomeworkFilesJson,_tmpGradeValue,_tmpGradeWeight);
+            final Long _tmpHomeworkPartId;
+            if (_cursor.isNull(_cursorIndexOfHomeworkPartId)) {
+              _tmpHomeworkPartId = null;
+            } else {
+              _tmpHomeworkPartId = _cursor.getLong(_cursorIndexOfHomeworkPartId);
+            }
+            _item = new LessonEntity(_tmpId,_tmpDateMillis,_tmpNumInDay,_tmpSubjectId,_tmpSubjectName,_tmpSubjectShort,_tmpTopic,_tmpTeacherName,_tmpHomeworkText,_tmpHomeworkFilesJson,_tmpGradeValue,_tmpGradeWeight,_tmpHomeworkPartId);
+            _result.add(_item);
+          }
+          return _result;
+        } finally {
+          _cursor.close();
+        }
+      }
+
+      @Override
+      protected void finalize() {
+        _statement.release();
+      }
+    });
+  }
+
+  @Override
+  public Flow<List<LessonEntity>> getUpcomingHomeworks(final long todayStartMillis) {
+    final String _sql = "SELECT * FROM lessons WHERE (homeworkText != '' OR homeworkFilesJson != '[]') AND dateMillis >= ? ORDER BY dateMillis ASC, numInDay ASC";
+    final RoomSQLiteQuery _statement = RoomSQLiteQuery.acquire(_sql, 1);
+    int _argIndex = 1;
+    _statement.bindLong(_argIndex, todayStartMillis);
+    return CoroutinesRoom.createFlow(__db, false, new String[] {"lessons"}, new Callable<List<LessonEntity>>() {
+      @Override
+      @NonNull
+      public List<LessonEntity> call() throws Exception {
+        final Cursor _cursor = DBUtil.query(__db, _statement, false, null);
+        try {
+          final int _cursorIndexOfId = CursorUtil.getColumnIndexOrThrow(_cursor, "id");
+          final int _cursorIndexOfDateMillis = CursorUtil.getColumnIndexOrThrow(_cursor, "dateMillis");
+          final int _cursorIndexOfNumInDay = CursorUtil.getColumnIndexOrThrow(_cursor, "numInDay");
+          final int _cursorIndexOfSubjectId = CursorUtil.getColumnIndexOrThrow(_cursor, "subjectId");
+          final int _cursorIndexOfSubjectName = CursorUtil.getColumnIndexOrThrow(_cursor, "subjectName");
+          final int _cursorIndexOfSubjectShort = CursorUtil.getColumnIndexOrThrow(_cursor, "subjectShort");
+          final int _cursorIndexOfTopic = CursorUtil.getColumnIndexOrThrow(_cursor, "topic");
+          final int _cursorIndexOfTeacherName = CursorUtil.getColumnIndexOrThrow(_cursor, "teacherName");
+          final int _cursorIndexOfHomeworkText = CursorUtil.getColumnIndexOrThrow(_cursor, "homeworkText");
+          final int _cursorIndexOfHomeworkFilesJson = CursorUtil.getColumnIndexOrThrow(_cursor, "homeworkFilesJson");
+          final int _cursorIndexOfGradeValue = CursorUtil.getColumnIndexOrThrow(_cursor, "gradeValue");
+          final int _cursorIndexOfGradeWeight = CursorUtil.getColumnIndexOrThrow(_cursor, "gradeWeight");
+          final int _cursorIndexOfHomeworkPartId = CursorUtil.getColumnIndexOrThrow(_cursor, "homeworkPartId");
+          final List<LessonEntity> _result = new ArrayList<LessonEntity>(_cursor.getCount());
+          while (_cursor.moveToNext()) {
+            final LessonEntity _item;
+            final long _tmpId;
+            _tmpId = _cursor.getLong(_cursorIndexOfId);
+            final long _tmpDateMillis;
+            _tmpDateMillis = _cursor.getLong(_cursorIndexOfDateMillis);
+            final int _tmpNumInDay;
+            _tmpNumInDay = _cursor.getInt(_cursorIndexOfNumInDay);
+            final Long _tmpSubjectId;
+            if (_cursor.isNull(_cursorIndexOfSubjectId)) {
+              _tmpSubjectId = null;
+            } else {
+              _tmpSubjectId = _cursor.getLong(_cursorIndexOfSubjectId);
+            }
+            final String _tmpSubjectName;
+            _tmpSubjectName = _cursor.getString(_cursorIndexOfSubjectName);
+            final String _tmpSubjectShort;
+            _tmpSubjectShort = _cursor.getString(_cursorIndexOfSubjectShort);
+            final String _tmpTopic;
+            _tmpTopic = _cursor.getString(_cursorIndexOfTopic);
+            final String _tmpTeacherName;
+            _tmpTeacherName = _cursor.getString(_cursorIndexOfTeacherName);
+            final String _tmpHomeworkText;
+            _tmpHomeworkText = _cursor.getString(_cursorIndexOfHomeworkText);
+            final String _tmpHomeworkFilesJson;
+            _tmpHomeworkFilesJson = _cursor.getString(_cursorIndexOfHomeworkFilesJson);
+            final String _tmpGradeValue;
+            if (_cursor.isNull(_cursorIndexOfGradeValue)) {
+              _tmpGradeValue = null;
+            } else {
+              _tmpGradeValue = _cursor.getString(_cursorIndexOfGradeValue);
+            }
+            final Integer _tmpGradeWeight;
+            if (_cursor.isNull(_cursorIndexOfGradeWeight)) {
+              _tmpGradeWeight = null;
+            } else {
+              _tmpGradeWeight = _cursor.getInt(_cursorIndexOfGradeWeight);
+            }
+            final Long _tmpHomeworkPartId;
+            if (_cursor.isNull(_cursorIndexOfHomeworkPartId)) {
+              _tmpHomeworkPartId = null;
+            } else {
+              _tmpHomeworkPartId = _cursor.getLong(_cursorIndexOfHomeworkPartId);
+            }
+            _item = new LessonEntity(_tmpId,_tmpDateMillis,_tmpNumInDay,_tmpSubjectId,_tmpSubjectName,_tmpSubjectShort,_tmpTopic,_tmpTeacherName,_tmpHomeworkText,_tmpHomeworkFilesJson,_tmpGradeValue,_tmpGradeWeight,_tmpHomeworkPartId);
             _result.add(_item);
           }
           return _result;

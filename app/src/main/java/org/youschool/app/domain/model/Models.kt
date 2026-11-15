@@ -12,12 +12,22 @@ data class Lesson(
     val homeworkFiles: List<HomeworkAttachment>,
     val isHomeworkDone: Boolean = false,
     val gradeValue: String? = null,
-    val gradeWeight: Int? = null
+    val gradeWeight: Int? = null,
+    val grades: List<Grade> = emptyList(),
+    val homeworkPartId: Long? = null
 )
 
 data class HomeworkAttachment(
     val fileId: Long,
-    val fileName: String
+    val fileName: String,
+    val variantId: Long? = null
+)
+
+data class HomeworkResultFile(
+    val fileId: Long,
+    val fileName: String,
+    val fileSize: Long? = null,
+    val fileType: String? = null
 )
 
 data class Grade(
@@ -26,18 +36,34 @@ data class Grade(
     val subjectName: String,
     val value: String,
     val numericValue: Double,
-    val weight: Int,
+    val weight: Double,
     val date: String,
     val typeName: String,
-    val teacherName: String
+    val teacherName: String,
+    val markKey: String = "$lessonId-$date-$value",
+    val isRead: Boolean = false
 )
 
 data class SubjectAverage(
     val subjectName: String,
     val averageScore: Double,
     val gradesCount: Int,
-    val targetFiveNeeded: Int = 0
+    val totalWeight: Double = 0.0
 )
+
+data class SimulatedGrade(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val numericValue: Double,
+    val displayValue: String,
+    val weight: Double
+)
+
+data class SubjectSimulation(
+    val simulatedGrades: List<SimulatedGrade> = emptyList(),
+    val excludedGradeKeys: Set<String> = emptySet()
+) {
+    val isActive: Boolean get() = simulatedGrades.isNotEmpty() || excludedGradeKeys.isNotEmpty()
+}
 
 data class UserProfile(
     val userId: Long,

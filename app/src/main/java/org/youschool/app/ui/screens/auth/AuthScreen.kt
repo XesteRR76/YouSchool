@@ -1,5 +1,9 @@
 package org.youschool.app.ui.screens.auth
 
+import android.annotation.SuppressLint
+import android.webkit.JavascriptInterface
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -19,6 +23,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,7 +36,15 @@ sealed interface AuthUiState {
     object Idle : AuthUiState
     object Loading : AuthUiState
     object Success : AuthUiState
+    data class RequireCaptcha(val username: String) : AuthUiState
     data class Error(val message: String) : AuthUiState
+}
+
+class CaptchaJsBridge(private val onToken: (String) -> Unit) {
+    @JavascriptInterface
+    fun onTokenReceived(token: String) {
+        onToken(token)
+    }
 }
 
 class AuthViewModel(private val repository: SchoolRepository) : ViewModel() {
@@ -49,7 +62,7 @@ class AuthViewModel(private val repository: SchoolRepository) : ViewModel() {
         }
     }
 
-    fun login(loginText: String, passwordText: String) {
+    fun login(loginText: String, passwordText: String, captchaToken: String? = null) {
         if (loginText.isBlank() || passwordText.isBlank()) {
             _uiState.value = AuthUiState.Error("Введите логин и пароль")
             return
@@ -57,13 +70,23 @@ class AuthViewModel(private val repository: SchoolRepository) : ViewModel() {
 
         viewModelScope.launch {
             _uiState.value = AuthUiState.Loading
-            val result = repository.login(loginText.trim(), passwordText)
+            val result = repository.login(loginText.trim(), passwordText, captchaToken)
             if (result.isSuccess) {
                 _uiState.value = AuthUiState.Success
             } else {
                 val errorMsg = result.exceptionOrNull()?.message ?: "Не удалось войти"
-                _uiState.value = AuthUiState.Error(errorMsg)
+                if (errorMsg.contains("капчу") || errorMsg.contains("код 3")) {
+                    _uiState.value = AuthUiState.RequireCaptcha(loginText.trim())
+                } else {
+                    _uiState.value = AuthUiState.Error(errorMsg)
+                }
             }
+        }
+    }
+
+    fun dismissCaptcha() {
+        if (_uiState.value is AuthUiState.RequireCaptcha) {
+            _uiState.value = AuthUiState.Error("Вход отменен. Требуется подтвердить проверку.")
         }
     }
 }
@@ -83,6 +106,64 @@ fun AuthScreen(
         if (uiState is AuthUiState.Success) {
             onLoginSuccess()
         }
+    }
+
+    if (uiState is AuthUiState.RequireCaptcha) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissCaptcha() },
+            title = { Text("Подтвердите, что вы не робот") },
+            text = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(280.dp)
+                ) {
+                    AndroidView(
+                        modifier = Modifier.fillMaxSize(),
+                        factory = { context ->
+                            WebView(context).apply {
+                                @SuppressLint("SetJavaScriptEnabled")
+                                settings.javaScriptEnabled = true
+                                settings.domStorageEnabled = true
+                                webViewClient = WebViewClient()
+                                addJavascriptInterface(CaptchaJsBridge { token ->
+                                    post {
+                                        viewModel.login(username, password, token)
+                                    }
+                                }, "AndroidInterface")
+
+                                val html = """
+                                    <!DOCTYPE html>
+                                    <html>
+                                    <head>
+                                      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                                      <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+                                      <script>
+                                        function onCaptchaSuccess(token) {
+                                          if (window.AndroidInterface) {
+                                            window.AndroidInterface.onTokenReceived(token);
+                                          }
+                                        }
+                                      </script>
+                                    </head>
+                                    <body style="display:flex;justify-content:center;align-items:center;min-height:90vh;margin:0;background:#1e1e1e;">
+                                      <div class="g-recaptcha" data-sitekey="6LfXOhYUAAAAAJ40iBnYX47lqtIkd2Wz-hAL9gNM" data-callback="onCaptchaSuccess"></div>
+                                    </body>
+                                    </html>
+                                """.trimIndent()
+                                loadDataWithBaseURL("https://app.eschool.center", html, "text/html", "UTF-8", null)
+                            }
+                        }
+                    )
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissCaptcha() }) {
+                    Text("Отмена")
+                }
+            }
+        )
     }
 
     Surface(

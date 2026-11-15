@@ -1,8 +1,12 @@
 package org.youschool.app.data.repository
 
+import android.content.Context
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -11,13 +15,18 @@ import org.youschool.app.core.database.YouSchoolDatabase
 import org.youschool.app.core.database.entities.GradeEntity
 import org.youschool.app.core.database.entities.HomeworkStatusEntity
 import org.youschool.app.core.database.entities.LessonEntity
+import org.youschool.app.core.database.entities.PendingHomeworkSyncEntity
+import org.youschool.app.core.database.entities.ReadGradeEntity
 import org.youschool.app.core.network.EschoolApiClient
 import org.youschool.app.core.network.dto.FileDto
 import org.youschool.app.domain.model.*
 import org.youschool.app.domain.repository.SchoolRepository
+import java.io.File
+import java.text.SimpleDateFormat
 import java.util.*
 
 class SchoolRepositoryImpl(
+    private val context: Context,
     private val database: YouSchoolDatabase,
     private val apiClient: EschoolApiClient,
     private val authManager: AuthManager
@@ -39,10 +48,18 @@ class SchoolRepositoryImpl(
 
         val lessonsFlow = database.lessonDao().getLessonsForDay(startOfDay, endOfDay)
         val statusFlow = database.homeworkStatusDao().getAllStatuses()
+        val gradesFlow = database.gradeDao().getAllGrades()
 
-        return combine(lessonsFlow, statusFlow) { entities, statuses ->
+        return combine(lessonsFlow, statusFlow, gradesFlow) { entities, statuses, grades ->
             val statusMap = statuses.associateBy { it.lessonId }
-            entities.map { it.toDomain(statusMap[it.id]?.isCompleted ?: false) }
+            val gradesByLesson = grades.groupBy { it.lessonId }
+            entities.map { entity ->
+                val lessonGrades = (gradesByLesson[entity.id] ?: emptyList()).map { it.toDomain() }
+                entity.toDomain(
+                    isDone = statusMap[entity.id]?.isCompleted ?: false,
+                    lessonGrades = lessonGrades
+                )
+            }
         }
     }
 
@@ -56,9 +73,64 @@ class SchoolRepositoryImpl(
         }
     }
 
+    override fun getUpcomingHomeworks(): Flow<List<Lesson>> {
+        val calendar = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val startOfToday = calendar.timeInMillis
+
+        val lessonsFlow = database.lessonDao().getUpcomingHomeworks(startOfToday)
+        val statusFlow = database.homeworkStatusDao().getAllStatuses()
+
+        return combine(lessonsFlow, statusFlow) { entities, statuses ->
+            val statusMap = statuses.associateBy { it.lessonId }
+            entities.map { it.toDomain(statusMap[it.id]?.isCompleted ?: false) }
+        }
+    }
+
+    private val isoDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault())
+
+    override fun getNewGrades(): Flow<List<Grade>> {
+        val gradesFlow = database.gradeDao().getAllGrades()
+        val readFlow = database.readGradeDao().getAllReadGrades()
+
+        return combine(gradesFlow, readFlow) { grades, readEntities ->
+            val readKeySet = readEntities.map { it.markKey }.toSet()
+            val sevenDaysAgoMs = System.currentTimeMillis() - 7 * 86400000L
+
+            grades.mapNotNull { entity ->
+                val key = "${entity.lessonId ?: 0}_${entity.markDate}_${entity.markVal}"
+                if (readKeySet.contains(key)) return@mapNotNull null
+
+                val timestamp = try {
+                    isoDateFormat.parse(entity.markDate)?.time ?: 0L
+                } catch (e: Exception) {
+                    0L
+                }
+
+                // Threshold: show marks added within the last 7 days
+                if (timestamp < sevenDaysAgoMs && timestamp > 0L) {
+                    return@mapNotNull null
+                }
+
+                entity.toDomain(isRead = false)
+            }.sortedByDescending { it.date }
+        }
+    }
+
     override fun getAllGrades(): Flow<List<Grade>> {
-        return database.gradeDao().getAllGrades().map { entities ->
-            entities.map { it.toDomain() }
+        val gradesFlow = database.gradeDao().getAllGrades()
+        val readFlow = database.readGradeDao().getAllReadGrades()
+
+        return combine(gradesFlow, readFlow) { grades, readEntities ->
+            val readKeySet = readEntities.map { it.markKey }.toSet()
+            grades.map { entity ->
+                val key = "${entity.lessonId ?: 0}_${entity.markDate}_${entity.markVal}"
+                entity.toDomain(isRead = readKeySet.contains(key))
+            }
         }
     }
 
@@ -67,7 +139,7 @@ class SchoolRepositoryImpl(
             val grouped = entities.groupBy { it.subject }
             grouped.map { (subject, grades) ->
                 var totalWeightedScore = 0.0
-                var totalWeight = 0
+                var totalWeight = 0.0
                 for (g in grades) {
                     if (g.markNum > 0) {
                         totalWeightedScore += g.markNum * g.weight
@@ -75,31 +147,20 @@ class SchoolRepositoryImpl(
                     }
                 }
                 val avg = if (totalWeight > 0) totalWeightedScore / totalWeight else 0.0
-                // Calculate how many 5s needed to reach 4.60 (an A / 5)
-                var neededFives = 0
-                if (avg in 1.0..4.59 && totalWeight > 0) {
-                    var simulatedTotal = totalWeightedScore
-                    var simulatedWeight = totalWeight
-                    while ((simulatedTotal / simulatedWeight) < 4.60 && neededFives < 30) {
-                        simulatedTotal += 5.0
-                        simulatedWeight += 1
-                        neededFives++
-                    }
-                }
 
                 SubjectAverage(
                     subjectName = subject,
                     averageScore = avg,
                     gradesCount = grades.size,
-                    targetFiveNeeded = neededFives
+                    totalWeight = totalWeight
                 )
             }.sortedBy { it.subjectName }
         }
     }
 
-    override suspend fun syncDayLessons(dateMillis: Long): Result<Unit> {
+    override suspend fun syncDayLessons(dateMillis: Long): Result<Unit> = withContext(Dispatchers.IO) {
         val userId = authManager.getUserId()
-        if (userId <= 0) return Result.failure(Exception("Пользователь не авторизован"))
+        if (userId <= 0) return@withContext Result.failure(Exception("Пользователь не авторизован"))
 
         val calendar = Calendar.getInstance().apply {
             timeInMillis = dateMillis
@@ -111,29 +172,50 @@ class SchoolRepositoryImpl(
         val startOfDay = calendar.timeInMillis
         calendar.add(Calendar.DAY_OF_YEAR, 1)
         val endOfDay = calendar.timeInMillis
+        val syncStart = startOfDay - 7 * 86400000L
+        val syncEnd = endOfDay + 7 * 86400000L
 
-        return try {
-            val response = apiClient.getDiary(userId, startOfDay, endOfDay)
+        try {
+            val response = apiClient.getDiary(userId, syncStart, syncEnd)
             if (response.isSuccess) {
                 val lessonsDto = response.getOrNull()?.lesson ?: emptyList()
                 val entities = lessonsDto.map { dto ->
                     var homeworkText = ""
                     val filesList = mutableListOf<FileDto>()
+                    var homeworkPartId: Long? = null
+                    var isServerDone: Boolean? = null
 
                     for (part in dto.part) {
                         if (part.cat == "DZ") {
+                            homeworkPartId = part.id
+                            if (part.ready != null) {
+                                isServerDone = (part.ready == 1)
+                            }
                             for (v in part.variant) {
                                 if (!v.text.isNullOrBlank()) {
-                                    homeworkText += (if (homeworkText.isNotEmpty()) "\n" else "") + v.text
+                                    val cleanText = android.text.Html.fromHtml(v.text, android.text.Html.FROM_HTML_MODE_COMPACT).toString().trim()
+                                    homeworkText += (if (homeworkText.isNotEmpty()) "\n" else "") + cleanText
                                 }
-                                filesList.addAll(v.file)
+                                for (f in v.file) {
+                                    filesList.add(f.copy(variantId = v.id))
+                                }
                             }
+                        }
+                    }
+
+                    // Two-way sync: if server has a status for this homework and local user hasn't queued an offline change, reflect server status
+                    if (homeworkPartId != null && isServerDone != null) {
+                        val pending = database.pendingHomeworkSyncDao().getPendingByPartId(homeworkPartId)
+                        if (pending == null) {
+                            database.homeworkStatusDao().setStatus(
+                                HomeworkStatusEntity(dto.id, isServerDone)
+                            )
                         }
                     }
 
                     LessonEntity(
                         id = dto.id,
-                        dateMillis = dto.date.toLongOrNull() ?: startOfDay,
+                        dateMillis = dto.date ?: startOfDay,
                         numInDay = dto.numInDay,
                         subjectId = dto.unit?.id,
                         subjectName = dto.unit?.name ?: "Урок",
@@ -143,12 +225,12 @@ class SchoolRepositoryImpl(
                         homeworkText = homeworkText,
                         homeworkFilesJson = json.encodeToString(filesList),
                         gradeValue = null,
-                        gradeWeight = null
+                        gradeWeight = null,
+                        homeworkPartId = homeworkPartId
                     )
                 }
 
-                database.lessonDao().deleteLessonsForDay(startOfDay, endOfDay)
-                database.lessonDao().insertLessons(entities)
+                database.lessonDao().replaceLessonsForRange(syncStart, syncEnd, entities)
                 Result.success(Unit)
             } else {
                 Result.failure(response.exceptionOrNull() ?: Exception("Ошибка загрузки расписания"))
@@ -158,47 +240,42 @@ class SchoolRepositoryImpl(
         }
     }
 
-    override suspend fun syncGrades(): Result<Unit> {
+    override suspend fun syncGrades(): Result<Unit> = withContext(Dispatchers.IO) {
         val userId = authManager.getUserId()
-        if (userId <= 0) return Result.failure(Exception("Пользователь не авторизован"))
+        if (userId <= 0) return@withContext Result.failure(Exception("Пользователь не авторизован"))
 
-        return try {
-            // Запрашиваем текущие периоды
-            val currentYear = Calendar.getInstance().get(Calendar.YEAR)
-            val periodsResult = apiClient.getPeriods(currentYear)
-            var currentPeriodId: Long = 0
-
-            if (periodsResult.isSuccess) {
-                val containers = periodsResult.getOrNull() ?: emptyList()
-                val now = System.currentTimeMillis()
-                for (container in containers) {
-                    for (item in container.items) {
-                        if (now in item.date1..item.date2 && item.typeCode == "Q") {
-                            currentPeriodId = item.id
-                            break
-                        }
-                    }
-                }
+        try {
+            val defaultPeriodResult = apiClient.getDefaultPeriodId(userId)
+            val currentPeriodId = if (defaultPeriodResult.isSuccess) {
+                defaultPeriodResult.getOrThrow()
+            } else {
+                556483L
             }
+
+            // Fetch units to get accurate subject names
+            val unitsResult = apiClient.getDiaryUnits(userId, currentPeriodId)
+            val unitNames = unitsResult.getOrNull()?.result?.associate { (it.unitId ?: 0L) to (it.unitName ?: "") } ?: emptyMap()
 
             val gradesResult = apiClient.getGradesForPeriod(userId, currentPeriodId)
             if (gradesResult.isSuccess) {
                 val gradesDto = gradesResult.getOrNull()?.result ?: emptyList()
-                val entities = gradesDto.map { dto ->
+                val entities = gradesDto.filter { !it.markVal.isNullOrBlank() }.map { dto ->
+                    val actualMark = dto.markVal?.toDoubleOrNull() ?: 0.0
+                    val subjectName = unitNames[dto.unitId] ?: "Предмет"
+
                     GradeEntity(
-                        lessonId = dto.lessonId,
+                        lessonId = dto.lessonId ?: 0L,
                         unitId = dto.unitId,
-                        subject = dto.subject ?: "Предмет",
-                        weight = if (dto.mktWt > 0) dto.mktWt else 1,
+                        subject = subjectName,
+                        weight = dto.mktWt ?: 1.0,
                         markVal = dto.markVal ?: "",
-                        markNum = dto.markNum ?: dto.markVal?.toDoubleOrNull() ?: 0.0,
+                        markNum = actualMark,
                         markDate = dto.markDate ?: "",
                         workType = dto.lptName ?: "",
                         teacherFio = dto.teachFio ?: ""
                     )
                 }
-                database.gradeDao().clearAllGrades()
-                database.gradeDao().insertGrades(entities)
+                database.gradeDao().replaceAllGrades(entities)
                 Result.success(Unit)
             } else {
                 Result.failure(gradesResult.exceptionOrNull() ?: Exception("Ошибка загрузки оценок"))
@@ -208,13 +285,78 @@ class SchoolRepositoryImpl(
         }
     }
 
-    override suspend fun toggleHomeworkStatus(lessonId: Long, isDone: Boolean) {
+    override suspend fun toggleHomeworkStatus(lessonId: Long, isDone: Boolean, comment: String?) = withContext(Dispatchers.IO) {
+        // 1. Instant local update for offline-first responsiveness
         database.homeworkStatusDao().setStatus(HomeworkStatusEntity(lessonId, isDone))
+
+        // 2. Synchronize with server if lesson has a homework partId
+        val lesson = database.lessonDao().getLessonById(lessonId)
+        val partId = lesson?.homeworkPartId
+        if (partId != null) {
+            val result = apiClient.setHomeworkDone(partId, isDone, needRecheck = true, comment = comment)
+            if (result.isSuccess) {
+                database.pendingHomeworkSyncDao().remove(partId)
+            } else {
+                // If offline or network error, enqueue for background replay
+                database.pendingHomeworkSyncDao().enqueue(
+                    PendingHomeworkSyncEntity(partId, lessonId, isDone, comment)
+                )
+            }
+        }
     }
 
-    override suspend fun login(login: String, rawPassword: String): Result<UserProfile> {
+    override suspend fun syncPendingHomeworkStatus(): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val pending = database.pendingHomeworkSyncDao().getAllPendingList()
+            for (item in pending) {
+                val result = apiClient.setHomeworkDone(item.partId, item.isCompleted, needRecheck = true, comment = item.comment)
+                if (result.isSuccess) {
+                    database.pendingHomeworkSyncDao().remove(item.partId)
+                }
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun getHomeworkResultFiles(partId: Long): Result<List<HomeworkResultFile>> = withContext(Dispatchers.IO) {
+        val prsId = authManager.getPrsId()
+        val detailsResult = apiClient.getHomeworkDetails(partId, prsId)
+        detailsResult.map { details ->
+            details.attach.filter { it.is_result == 1 }.map { fileDto ->
+                HomeworkResultFile(
+                    fileId = fileDto.fileId,
+                    fileName = fileDto.fileName,
+                    fileSize = fileDto.fileSize,
+                    fileType = fileDto.fileType
+                )
+            }
+        }
+    }
+
+    override suspend fun uploadHomeworkResult(partId: Long, file: File): Result<HomeworkResultFile> = withContext(Dispatchers.IO) {
+        val prsId = authManager.getPrsId()
+        val uploadResult = apiClient.uploadHomeworkResultFile(partId, prsId, file)
+        uploadResult.map { dto ->
+            HomeworkResultFile(
+                fileId = dto.fileId,
+                fileName = dto.fileName ?: file.name,
+                fileSize = dto.fileSize ?: file.length(),
+                fileType = dto.contentType
+            )
+        }
+    }
+
+    override suspend fun deleteHomeworkResult(partId: Long, fileId: Long): Result<Unit> = withContext(Dispatchers.IO) {
+        val prsId = authManager.getPrsId()
+        val delResult = apiClient.deleteHomeworkResultFile(partId, prsId, fileId)
+        delResult.map { Unit }
+    }
+
+    override suspend fun login(login: String, rawPassword: String, captchaToken: String?): Result<UserProfile> {
         val hash = AuthManager.sha256(rawPassword)
-        val result = apiClient.login(login, hash)
+        val result = apiClient.login(login, hash, captchaToken)
         return if (result.isSuccess) {
             val state = result.getOrNull()
             val userId = state?.userId ?: state?.user?.userId ?: -1L
@@ -253,10 +395,66 @@ class SchoolRepositoryImpl(
         authManager.clear()
     }
 
-    private fun LessonEntity.toDomain(isDone: Boolean): Lesson {
+    override suspend fun markGradeAsRead(markKey: String) {
+        withContext(Dispatchers.IO) {
+            database.readGradeDao().markAsRead(ReadGradeEntity(markKey))
+        }
+    }
+
+    override suspend fun markAllGradesAsRead() {
+        withContext(Dispatchers.IO) {
+            val grades = database.gradeDao().getAllGrades().firstOrNull() ?: emptyList()
+            val entities = grades.map { entity ->
+                val key = "${entity.lessonId ?: 0}_${entity.markDate}_${entity.markVal}"
+                ReadGradeEntity(key)
+            }
+            database.readGradeDao().markAsRead(entities)
+        }
+    }
+
+    override suspend fun restoreGradeReadStatus(markKeys: List<String>) {
+        withContext(Dispatchers.IO) {
+            database.readGradeDao().unmarkMultipleAsRead(markKeys)
+        }
+    }
+
+    override suspend fun downloadHomeworkFile(fileId: Long, fileName: String, variantId: Long?): Result<File> = withContext(Dispatchers.IO) {
+        val safeName = fileName.replace(Regex("[/\\\\?%*:|\"<>]"), "_")
+        val destinationFile = File(context.cacheDir, "homework_files/$fileId/$safeName")
+        if (destinationFile.exists() && destinationFile.length() > 0) {
+            return@withContext Result.success(destinationFile)
+        }
+
+        var actualVariantId = variantId
+        if (actualVariantId == null) {
+            syncDayLessons(System.currentTimeMillis())
+            val lessons = database.lessonDao().getAllLessonsWithHomework().firstOrNull() ?: emptyList()
+            for (lesson in lessons) {
+                try {
+                    val dtos = json.decodeFromString<List<FileDto>>(lesson.homeworkFilesJson)
+                    val match = dtos.find { it.id == fileId }
+                    if (match?.variantId != null) {
+                        actualVariantId = match.variantId
+                        break
+                    }
+                } catch (_: Exception) {}
+            }
+        }
+
+        apiClient.downloadFile(fileId, destinationFile, actualVariantId)
+    }
+
+    private fun LessonEntity.toDomain(
+        isDone: Boolean,
+        lessonGrades: List<Grade> = emptyList()
+    ): Lesson {
         val files: List<HomeworkAttachment> = try {
             val dtos = json.decodeFromString<List<FileDto>>(homeworkFilesJson)
-            dtos.map { HomeworkAttachment(it.id, it.fileName) }
+            dtos.mapNotNull { dto ->
+                if (dto.id != null && dto.fileName != null) {
+                    HomeworkAttachment(dto.id, dto.fileName, dto.variantId)
+                } else null
+            }
         } catch (e: Exception) {
             emptyList()
         }
@@ -273,11 +471,14 @@ class SchoolRepositoryImpl(
             homeworkFiles = files,
             isHomeworkDone = isDone,
             gradeValue = gradeValue,
-            gradeWeight = gradeWeight
+            gradeWeight = gradeWeight,
+            grades = lessonGrades,
+            homeworkPartId = homeworkPartId
         )
     }
 
-    private fun GradeEntity.toDomain(): Grade {
+    private fun GradeEntity.toDomain(isRead: Boolean = false): Grade {
+        val key = "${lessonId ?: 0}_${markDate}_${markVal}"
         return Grade(
             id = id.toString(),
             lessonId = lessonId,
@@ -287,7 +488,9 @@ class SchoolRepositoryImpl(
             weight = weight,
             date = markDate,
             typeName = workType,
-            teacherName = teacherFio
+            teacherName = teacherFio,
+            markKey = key,
+            isRead = isRead
         )
     }
 }

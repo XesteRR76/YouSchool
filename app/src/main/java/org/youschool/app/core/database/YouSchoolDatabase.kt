@@ -4,26 +4,26 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
-import org.youschool.app.core.database.dao.GradeDao
-import org.youschool.app.core.database.dao.HomeworkStatusDao
-import org.youschool.app.core.database.dao.LessonDao
-import org.youschool.app.core.database.entities.GradeEntity
-import org.youschool.app.core.database.entities.HomeworkStatusEntity
-import org.youschool.app.core.database.entities.LessonEntity
+import org.youschool.app.core.database.dao.*
+import org.youschool.app.core.database.entities.*
 
 @Database(
     entities = [
         LessonEntity::class,
         GradeEntity::class,
-        HomeworkStatusEntity::class
+        HomeworkStatusEntity::class,
+        ReadGradeEntity::class,
+        PendingHomeworkSyncEntity::class
     ],
-    version = 1,
+    version = 5,
     exportSchema = false
 )
 abstract class YouSchoolDatabase : RoomDatabase() {
     abstract fun lessonDao(): LessonDao
     abstract fun gradeDao(): GradeDao
     abstract fun homeworkStatusDao(): HomeworkStatusDao
+    abstract fun readGradeDao(): ReadGradeDao
+    abstract fun pendingHomeworkSyncDao(): PendingHomeworkSyncDao
 
     companion object {
         @Volatile

@@ -5,14 +5,16 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.FormBody
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.logging.HttpLoggingInterceptor
 import org.youschool.app.core.auth.AuthManager
-import org.youschool.app.core.network.dto.DiaryResponse
-import org.youschool.app.core.network.dto.GradesResponse
-import org.youschool.app.core.network.dto.PeriodContainerDto
-import org.youschool.app.core.network.dto.StateResponse
+import org.youschool.app.core.network.dto.*
+import java.io.File
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
@@ -34,22 +36,59 @@ class EschoolApiClient(private val authManager: AuthManager) {
 
     private val baseUrl = "https://app.eschool.center/ec-server"
 
-    suspend fun login(username: String, passwordHash: String): Result<StateResponse> = withContext(Dispatchers.IO) {
+    private fun generateRandomAlphanumeric(length: Int): String {
+        val chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        return (1..length).map { chars.random() }.joinToString("")
+    }
+
+    suspend fun checkShowRecaptcha(username: String): Boolean = withContext(Dispatchers.IO) {
         try {
+            val request = Request.Builder()
+                .url("$baseUrl/showRecaptcha?username=$username")
+                .get()
+                .build()
+            val response = client.newCall(request).execute()
+            response.body?.string()?.trim() == "true"
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    suspend fun login(username: String, passwordHash: String, captchaToken: String? = null): Result<StateResponse> = withContext(Dispatchers.IO) {
+        try {
+            val pushToken = generateRandomAlphanumeric(64)
+            val deviceId = generateRandomAlphanumeric(32)
+            val deviceJson = """{"cliType":"web","cliVer":"v.4441","pushToken":"$pushToken","deviceId":"$deviceId","deviceName":"Chrome","deviceModel":"130","cliOs":"Android","cliOsVer":null}"""
+
+            val finalPassword = if (!captchaToken.isNullOrBlank()) passwordHash + captchaToken else passwordHash
+
             val formBody = FormBody.Builder()
                 .add("username", username)
-                .add("password", passwordHash)
+                .add("password", finalPassword)
+                .add("device", deviceJson)
                 .build()
 
             val request = Request.Builder()
                 .url("$baseUrl/login")
                 .post(formBody)
-                .addHeader("Content-Type", "application/x-www-form-urlencoded")
+                .header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Mobile) Chrome/120.0.0.0 Mobile Safari/537.36")
+                .header("Accept", "application/json, text/plain, */*")
+                .header("Origin", "https://app.eschool.center")
+                .header("Referer", "https://app.eschool.center/")
                 .build()
 
             val response = client.newCall(request).execute()
+            val responseBody = response.body?.string() ?: ""
+
             if (!response.isSuccessful) {
-                return@withContext Result.failure(IOException("Ошибка авторизации: код ${response.code}"))
+                val errorDetail = when (responseBody.trim()) {
+                    "1" -> "Неверный логин или пароль"
+                    "3" -> "Требуется пройти капчу (войдите на сайте или подтвердите проверку)"
+                    "4" -> "Аккаунт заблокирован"
+                    "5" -> "Ошибка параметров устройства"
+                    else -> if (responseBody.isNotBlank()) "код $responseBody" else "код ${response.code}"
+                }
+                return@withContext Result.failure(IOException("Ошибка авторизации: $errorDetail"))
             }
 
             var sessionId: String? = null
@@ -105,7 +144,7 @@ class EschoolApiClient(private val authManager: AuthManager) {
         }
     }
 
-    private suspend fun <T> executeWithAutoAuth(block: suspend (sessionId: String, route: String?) -> Result<T>): Result<T> {
+    private suspend fun <T> executeWithAutoAuth(block: suspend (sessionId: String, route: String?) -> Result<T>): Result<T> = withContext(Dispatchers.IO) {
         var sessionId = authManager.getSessionId()
         var route = authManager.getRoute()
 
@@ -115,12 +154,12 @@ class EschoolApiClient(private val authManager: AuthManager) {
             if (!login.isNullOrBlank() && !hash.isNullOrBlank()) {
                 val loginResult = login(login, hash)
                 if (loginResult.isFailure) {
-                    return Result.failure(loginResult.exceptionOrNull() ?: IOException("Ошибка входа"))
+                    return@withContext Result.failure(loginResult.exceptionOrNull() ?: IOException("Ошибка входа"))
                 }
                 sessionId = authManager.getSessionId()
                 route = authManager.getRoute()
             } else {
-                return Result.failure(IOException("Пользователь не авторизован"))
+                return@withContext Result.failure(IOException("Пользователь не авторизован"))
             }
         }
 
@@ -132,11 +171,11 @@ class EschoolApiClient(private val authManager: AuthManager) {
             if (!login.isNullOrBlank() && !hash.isNullOrBlank()) {
                 val loginResult = login(login, hash)
                 if (loginResult.isSuccess) {
-                    return block(authManager.getSessionId()!!, authManager.getRoute())
+                    return@withContext block(authManager.getSessionId()!!, authManager.getRoute())
                 }
             }
         }
-        return firstAttempt
+        firstAttempt
     }
 
     suspend fun getDiary(userId: Long, startMs: Long, endMs: Long): Result<DiaryResponse> {
@@ -179,6 +218,46 @@ class EschoolApiClient(private val authManager: AuthManager) {
         }
     }
 
+    suspend fun getDiaryUnits(userId: Long, periodId: Long): Result<UnitsResponse> {
+        return executeWithAutoAuth { sessionId, route ->
+            try {
+                val request = Request.Builder()
+                    .url("$baseUrl/student/getDiaryUnits/?userId=$userId&eiId=$periodId")
+                    .get()
+                    .addHeader("Cookie", buildCookieHeader(sessionId, route))
+                    .build()
+
+                val response = client.newCall(request).execute()
+                if (response.code == 401) return@executeWithAutoAuth Result.failure(IOException("401 Unauthorized"))
+                val body = response.body?.string() ?: ""
+                val units = json.decodeFromString<UnitsResponse>(body)
+                Result.success(units)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    suspend fun getDefaultPeriodId(userId: Long): Result<Long> {
+        return executeWithAutoAuth { sessionId, route ->
+            try {
+                val request = Request.Builder()
+                    .url("$baseUrl/student/getDiaryTtlMarksDefPeriod?userId=$userId")
+                    .get()
+                    .addHeader("Cookie", buildCookieHeader(sessionId, route))
+                    .build()
+
+                val response = client.newCall(request).execute()
+                if (response.code == 401) return@executeWithAutoAuth Result.failure(IOException("401 Unauthorized"))
+                val body = response.body?.string()?.trim() ?: ""
+                val periodId = body.toLongOrNull() ?: return@executeWithAutoAuth Result.failure(IOException("Некорректный ID периода: $body"))
+                Result.success(periodId)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
     suspend fun getPeriods(year: Int): Result<List<PeriodContainerDto>> {
         return executeWithAutoAuth { sessionId, route ->
             try {
@@ -193,6 +272,168 @@ class EschoolApiClient(private val authManager: AuthManager) {
                 val body = response.body?.string() ?: ""
                 val periods = json.decodeFromString<List<PeriodContainerDto>>(body)
                 Result.success(periods)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    suspend fun downloadFile(fileId: Long, destinationFile: File, variantId: Long? = null): Result<File> {
+        return executeWithAutoAuth { sessionId, route ->
+            try {
+                val candidateUrls = mutableListOf<String>()
+                if (variantId != null) {
+                    candidateUrls.add("$baseUrl/files/HOMEWORK_VARIANT/$variantId/$fileId")
+                }
+                candidateUrls.add("$baseUrl/files/getFileById?fileId=$fileId")
+                candidateUrls.add("$baseUrl/files/$fileId")
+
+                var lastCode = 0
+                for (url in candidateUrls) {
+                    val request = Request.Builder()
+                        .url(url)
+                        .get()
+                        .header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Mobile) Chrome/120.0.0.0 Mobile Safari/537.36")
+                        .addHeader("Cookie", buildCookieHeader(sessionId, route))
+                        .build()
+
+                    val response = client.newCall(request).execute()
+                    lastCode = response.code
+                    if (response.code == 401) return@executeWithAutoAuth Result.failure(IOException("401 Unauthorized"))
+                    if (response.isSuccessful) {
+                        val bytes = response.body?.bytes() ?: byteArrayOf()
+                        android.util.Log.d("EschoolFile", "URL: $url, code: ${response.code}, bytes: ${bytes.size}")
+                        if (bytes.isNotEmpty()) {
+                            destinationFile.parentFile?.mkdirs()
+                            destinationFile.writeBytes(bytes)
+                            return@executeWithAutoAuth Result.success(destinationFile)
+                        }
+                    }
+                }
+
+                Result.failure(IOException("Ошибка скачивания файла: HTTP $lastCode"))
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    suspend fun setHomeworkDone(
+        partId: Long,
+        isDone: Boolean,
+        needRecheck: Boolean = true,
+        comment: String? = null
+    ): Result<Unit> {
+        return executeWithAutoAuth { sessionId, route ->
+            try {
+                val doneVal = if (isDone) 1 else 0
+                val recheckParam = if (needRecheck) "&needRecheck=1" else ""
+                val jsonBody = if (!comment.isNullOrBlank()) {
+                    org.json.JSONObject().apply { put("pupilComm", comment) }.toString()
+                } else "{}"
+                val request = Request.Builder()
+                    .url("$baseUrl/student/hw?partId=$partId&isDone=$doneVal$recheckParam")
+                    .put(jsonBody.toRequestBody("application/json;charset=UTF-8".toMediaType()))
+                    .header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Mobile) Chrome/120.0.0.0 Mobile Safari/537.36")
+                    .header("Origin", "https://app.eschool.center")
+                    .header("Referer", "https://app.eschool.center/")
+                    .addHeader("Cookie", buildCookieHeader(sessionId, route))
+                    .build()
+
+                val response = client.newCall(request).execute()
+                if (response.code == 401) return@executeWithAutoAuth Result.failure(IOException("401 Unauthorized"))
+                if (response.isSuccessful) {
+                    Result.success(Unit)
+                } else {
+                    Result.failure(IOException("Ошибка смены статуса ДЗ: HTTP ${response.code}"))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    suspend fun getHomeworkDetails(partId: Long, prsId: Long): Result<HomeworkDetailsDto> {
+        return executeWithAutoAuth { sessionId, route ->
+            try {
+                val request = Request.Builder()
+                    .url("$baseUrl/student/getLPartPupil?partId=$partId&prsId=$prsId")
+                    .get()
+                    .header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Mobile) Chrome/120.0.0.0 Mobile Safari/537.36")
+                    .addHeader("Cookie", buildCookieHeader(sessionId, route))
+                    .build()
+
+                val response = client.newCall(request).execute()
+                if (response.code == 401) return@executeWithAutoAuth Result.failure(IOException("401 Unauthorized"))
+                val body = response.body?.string() ?: ""
+                val detailsResp = json.decodeFromString<HomeworkDetailsResponse>(body)
+                val first = detailsResp.result.firstOrNull()
+                if (first != null) {
+                    Result.success(first)
+                } else {
+                    Result.failure(IOException("Детали домашнего задания не найдены"))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    suspend fun uploadHomeworkResultFile(partId: Long, prsId: Long, file: File): Result<UploadFileResultDto> {
+        return executeWithAutoAuth { sessionId, route ->
+            try {
+                val mediaType = "application/octet-stream".toMediaType()
+                val fileBody = file.asRequestBody(mediaType)
+                val multipartBody = MultipartBody.Builder()
+                    .setType(MultipartBody.FORM)
+                    .addFormDataPart("file", file.name, fileBody)
+                    .build()
+
+                val request = Request.Builder()
+                    .url("$baseUrl/student/addFileResult?partId=$partId&for_prs_id=$prsId")
+                    .post(multipartBody)
+                    .header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Mobile) Chrome/120.0.0.0 Mobile Safari/537.36")
+                    .header("Origin", "https://app.eschool.center")
+                    .header("Referer", "https://app.eschool.center/")
+                    .addHeader("Cookie", buildCookieHeader(sessionId, route))
+                    .build()
+
+                val response = client.newCall(request).execute()
+                if (response.code == 401) return@executeWithAutoAuth Result.failure(IOException("401 Unauthorized"))
+                val body = response.body?.string() ?: ""
+                if (response.isSuccessful) {
+                    val uploadResult = json.decodeFromString<UploadFileResultDto>(body)
+                    Result.success(uploadResult)
+                } else {
+                    Result.failure(IOException("Ошибка загрузки файла: HTTP ${response.code} $body"))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
+    suspend fun deleteHomeworkResultFile(partId: Long, prsId: Long, fileId: Long): Result<Boolean> {
+        return executeWithAutoAuth { sessionId, route ->
+            try {
+                val request = Request.Builder()
+                    .url("$baseUrl/student/delFileResult?partId=$partId&fileId=$fileId&for_prs_id=$prsId")
+                    .delete()
+                    .header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Mobile) Chrome/120.0.0.0 Mobile Safari/537.36")
+                    .header("Origin", "https://app.eschool.center")
+                    .header("Referer", "https://app.eschool.center/")
+                    .addHeader("Cookie", buildCookieHeader(sessionId, route))
+                    .build()
+
+                val response = client.newCall(request).execute()
+                if (response.code == 401) return@executeWithAutoAuth Result.failure(IOException("401 Unauthorized"))
+                val body = response.body?.string()?.trim() ?: ""
+                val isSuccess = response.isSuccessful && (body == "true" || body == "")
+                if (isSuccess) {
+                    Result.success(true)
+                } else {
+                    Result.failure(IOException("Ошибка удаления файла: HTTP ${response.code} $body"))
+                }
             } catch (e: Exception) {
                 Result.failure(e)
             }

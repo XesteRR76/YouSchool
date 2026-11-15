@@ -12,7 +12,7 @@ data class GradeDto(
     val lessonId: Long? = null,
     val unitId: Long? = null,
     val subject: String? = null,
-    val mktWt: Int = 1,
+    val mktWt: Double? = 1.0,
     val markVal: String? = null,
     val markNum: Double? = null,
     val markDate: String? = null,
@@ -27,11 +27,15 @@ data class UnitsResponse(
 
 @Serializable
 data class DiaryUnitDto(
-    val unitId: Long,
-    val unitName: String,
+    val unitId: Long? = null,
+    val unitName: String? = null,
     val overMark: Double? = null,
     val rating: String? = null,
-    val totalMark: String? = null
+    val totalMark: String? = null,
+    val ttlEiId: Long? = null,
+    val ttlEiName: String? = null,
+    val ttlItCode: String? = null,
+    val sugTotalMark: String? = null
 )
 
 @Serializable

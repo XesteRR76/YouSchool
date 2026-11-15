@@ -10,3 +10,4 @@ string nav_homework
 string nav_profile
 string nav_schedule
 style Theme.YouSchool
+xml file_paths

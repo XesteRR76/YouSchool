@@ -5,6 +5,7 @@ import androidx.annotation.NonNull;
 import androidx.room.CoroutinesRoom;
 import androidx.room.EntityInsertionAdapter;
 import androidx.room.RoomDatabase;
+import androidx.room.RoomDatabaseKt;
 import androidx.room.RoomSQLiteQuery;
 import androidx.room.SharedSQLiteStatement;
 import androidx.room.util.CursorUtil;
@@ -60,7 +61,7 @@ public final class GradeDao_Impl implements GradeDao {
           statement.bindLong(3, entity.getUnitId());
         }
         statement.bindString(4, entity.getSubject());
-        statement.bindLong(5, entity.getWeight());
+        statement.bindDouble(5, entity.getWeight());
         statement.bindString(6, entity.getMarkVal());
         statement.bindDouble(7, entity.getMarkNum());
         statement.bindString(8, entity.getMarkDate());
@@ -95,6 +96,12 @@ public final class GradeDao_Impl implements GradeDao {
         }
       }
     }, $completion);
+  }
+
+  @Override
+  public Object replaceAllGrades(final List<GradeEntity> grades,
+      final Continuation<? super Unit> $completion) {
+    return RoomDatabaseKt.withTransaction(__db, (__cont) -> GradeDao.DefaultImpls.replaceAllGrades(GradeDao_Impl.this, grades, __cont), $completion);
   }
 
   @Override
@@ -159,8 +166,8 @@ public final class GradeDao_Impl implements GradeDao {
             }
             final String _tmpSubject;
             _tmpSubject = _cursor.getString(_cursorIndexOfSubject);
-            final int _tmpWeight;
-            _tmpWeight = _cursor.getInt(_cursorIndexOfWeight);
+            final double _tmpWeight;
+            _tmpWeight = _cursor.getDouble(_cursorIndexOfWeight);
             final String _tmpMarkVal;
             _tmpMarkVal = _cursor.getString(_cursorIndexOfMarkVal);
             final double _tmpMarkNum;
@@ -228,8 +235,8 @@ public final class GradeDao_Impl implements GradeDao {
             }
             final String _tmpSubject;
             _tmpSubject = _cursor.getString(_cursorIndexOfSubject);
-            final int _tmpWeight;
-            _tmpWeight = _cursor.getInt(_cursorIndexOfWeight);
+            final double _tmpWeight;
+            _tmpWeight = _cursor.getDouble(_cursorIndexOfWeight);
             final String _tmpMarkVal;
             _tmpMarkVal = _cursor.getString(_cursorIndexOfMarkVal);
             final double _tmpMarkNum;

@@ -1,9 +1,13 @@
 package org.youschool.app
 
 import android.app.Application
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import org.youschool.app.core.auth.AuthManager
 import org.youschool.app.core.database.YouSchoolDatabase
 import org.youschool.app.core.network.EschoolApiClient
+import org.youschool.app.core.network.NetworkMonitor
 import org.youschool.app.data.repository.SchoolRepositoryImpl
 import org.youschool.app.domain.repository.SchoolRepository
 
@@ -21,14 +25,31 @@ class YouSchoolApp : Application() {
     lateinit var repository: SchoolRepository
         private set
 
+    lateinit var themeManager: org.youschool.app.ui.theme.ThemeManager
+        private set
+
+    lateinit var networkMonitor: NetworkMonitor
+        private set
+
     override fun onCreate() {
         super.onCreate()
         instance = this
 
+        themeManager = org.youschool.app.ui.theme.ThemeManager(this)
         authManager = AuthManager(this)
         database = YouSchoolDatabase.getInstance(this)
         apiClient = EschoolApiClient(authManager)
-        repository = SchoolRepositoryImpl(database, apiClient, authManager)
+        repository = SchoolRepositoryImpl(this, database, apiClient, authManager)
+
+        networkMonitor = NetworkMonitor(this) {
+            repository.syncPendingHomeworkStatus()
+        }
+        networkMonitor.start()
+
+        // Attempt sync of any pending actions on app start
+        CoroutineScope(Dispatchers.IO).launch {
+            repository.syncPendingHomeworkStatus()
+        }
     }
 
     companion object {

@@ -1,3 +1,4 @@
+org.youschool.app:xml/file_paths = 0x7f0c0000
 org.youschool.app:styleable/Navigator = 0x7f0b000d
 org.youschool.app:styleable/NavInclude = 0x7f0b000c
 org.youschool.app:styleable/NavGraphNavigator = 0x7f0b000a
