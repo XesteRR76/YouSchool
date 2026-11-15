@@ -37,10 +37,13 @@ android {
     signingConfigs {
         create("release") {
             if (keystoreFile.exists()) {
+                val envStorePass = System.getenv("KEYSTORE_PASSWORD")?.takeIf { it.isNotBlank() } ?: "youschool"
+                val envKeyAlias = System.getenv("KEY_ALIAS")?.takeIf { it.isNotBlank() } ?: "youschool"
+                val envKeyPass = System.getenv("KEY_PASSWORD")?.takeIf { it.isNotBlank() } ?: "youschool"
                 storeFile = keystoreFile
-                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "youschool"
-                keyAlias = System.getenv("KEY_ALIAS") ?: "youschool"
-                keyPassword = System.getenv("KEY_PASSWORD") ?: "youschool"
+                storePassword = envStorePass
+                keyAlias = envKeyAlias
+                keyPassword = envKeyPass
             }
         }
     }

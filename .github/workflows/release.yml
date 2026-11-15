@@ -55,6 +55,9 @@ jobs:
           STOREPASS="${KEYSTORE_PASSWORD:-youschool}"
           ALIAS="${KEY_ALIAS:-youschool}"
           KEYPASS="${KEY_PASSWORD:-youschool}"
+          [ -z "$STOREPASS" ] && STOREPASS="youschool"
+          [ -z "$ALIAS" ] && ALIAS="youschool"
+          [ -z "$KEYPASS" ] && KEYPASS="youschool"
 
           if [ -s app/release.jks ] && keytool -list -keystore app/release.jks -storepass "$STOREPASS" >/dev/null 2>&1; then
             echo "Keystore verified successfully."
@@ -77,9 +80,9 @@ jobs:
 
       - name: Build Release APK
         env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'youschool' }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'youschool' }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'youschool' }}
         run: ./gradlew assembleRelease
 
       - name: Upload Release APK Artifact
