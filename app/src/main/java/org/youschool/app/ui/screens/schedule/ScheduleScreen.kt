@@ -21,7 +21,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.BaselineShift
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -30,6 +35,7 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import org.youschool.app.YouSchoolApp
+import org.youschool.app.domain.model.Grade
 import org.youschool.app.domain.model.HomeworkAttachment
 import org.youschool.app.domain.model.Lesson
 import org.youschool.app.domain.repository.SchoolRepository
@@ -442,6 +448,15 @@ fun LessonCard(
     onAttachmentClick: (HomeworkAttachment) -> Unit,
     onSubmissionClick: (() -> Unit)? = null
 ) {
+    var selectedGradeForDetails by remember { mutableStateOf<Grade?>(null) }
+
+    if (selectedGradeForDetails != null) {
+        GradeDetailsDialog(
+            grade = selectedGradeForDetails!!,
+            onDismiss = { selectedGradeForDetails = null }
+        )
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
@@ -453,7 +468,10 @@ fun LessonCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Surface(
                         shape = MaterialTheme.shapes.small,
                         color = MaterialTheme.colorScheme.primaryContainer,
@@ -480,45 +498,96 @@ fun LessonCard(
                     )
                 }
 
-                if (lesson.grades.isEmpty() && !lesson.gradeValue.isNullOrBlank()) {
-                    GradeBadge(mark = lesson.gradeValue)
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // Grades badges cluster on top right
+                if (lesson.grades.isNotEmpty()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        lesson.grades.forEach { grade ->
+                            GradeBadge(
+                                mark = grade.value,
+                                weight = grade.weight,
+                                showWeightSuperscript = true,
+                                onClick = { selectedGradeForDetails = grade }
+                            )
+                        }
+                    }
+                } else if (!lesson.gradeValue.isNullOrBlank()) {
+                    val fallbackWeight = lesson.gradeWeight?.toDouble()
+                    GradeBadge(
+                        mark = lesson.gradeValue,
+                        weight = fallbackWeight,
+                        showWeightSuperscript = true
+                    )
                 }
             }
 
-            // Grades under subject title and above homework
+            // Structured grades detail section under subject title
             if (lesson.grades.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    lesson.grades.forEach { grade ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .clip(MaterialTheme.shapes.small)
-                                .background(MaterialTheme.colorScheme.surface)
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            GradeBadge(mark = grade.value, weight = grade.weight)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            val weightStr = if (grade.weight % 1.0 == 0.0) grade.weight.toInt().toString() else "${grade.weight}"
-                            Text(
-                                text = "Вес: $weightStr",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            if (grade.typeName.isNotBlank()) {
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = grade.typeName,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.outline,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                val hasDetails = lesson.grades.any { it.typeName.isNotBlank() || it.weight != 1.0 }
+                if (hasDetails) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        lesson.grades.forEach { grade ->
+                            val gradeWeightStr = if (grade.weight % 1.0 == 0.0) {
+                                grade.weight.toInt().toString()
+                            } else {
+                                "${grade.weight}"
+                            }
+                            val displayTitle = grade.typeName.ifBlank { "Оценка за урок" }
+
+                            Surface(
+                                shape = MaterialTheme.shapes.small,
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(MaterialTheme.shapes.small)
+                                    .clickable { selectedGradeForDetails = grade }
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    GradeBadge(
+                                        mark = grade.value,
+                                        weight = grade.weight,
+                                        isCompact = true
+                                    )
+
+                                    Spacer(modifier = Modifier.width(8.dp))
+
+                                    Text(
+                                        text = displayTitle,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.weight(1f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+
+                                    Surface(
+                                        shape = MaterialTheme.shapes.extraSmall,
+                                        color = MaterialTheme.colorScheme.surfaceVariant,
+                                        modifier = Modifier.padding(start = 6.dp)
+                                    ) {
+                                        Text(
+                                            text = "вес $gradeWeightStr",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -621,24 +690,237 @@ fun LessonCard(
 fun GradeBadge(
     mark: String,
     weight: Double? = null,
-    modifier: Modifier = Modifier.padding(start = 8.dp)
+    modifier: Modifier = Modifier,
+    showWeightSuperscript: Boolean = false,
+    isCompact: Boolean = false,
+    onClick: (() -> Unit)? = null
 ) {
     val themeSettings by YouSchoolApp.instance.themeManager.themeSettings.collectAsState()
     val (bgColor, textColor) = remember(mark, weight, themeSettings) {
         GradeColorCalculator.calculateGradeColor(mark, weight, themeSettings)
     }
 
+    val displayText = remember(mark, weight, showWeightSuperscript, isCompact) {
+        if (showWeightSuperscript && weight != null && weight != 1.0) {
+            val weightStr = if (weight % 1.0 == 0.0) weight.toInt().toString() else "$weight"
+            buildAnnotatedString {
+                append(mark)
+                withStyle(
+                    SpanStyle(
+                        baselineShift = BaselineShift.Superscript,
+                        fontSize = if (isCompact) 8.sp else 10.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                ) {
+                    append(weightStr)
+                }
+            }
+        } else {
+            AnnotatedString(mark)
+        }
+    }
+
+    val baseModifier = if (onClick != null) {
+        modifier
+            .clip(MaterialTheme.shapes.small)
+            .clickable(onClick = onClick)
+    } else {
+        modifier
+    }
+
     Surface(
         shape = MaterialTheme.shapes.small,
         color = bgColor,
-        modifier = modifier
+        modifier = baseModifier
     ) {
         Text(
-            text = mark,
-            style = MaterialTheme.typography.titleMedium,
+            text = displayText,
+            style = if (isCompact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = textColor,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp)
+            modifier = Modifier.padding(
+                horizontal = if (isCompact) 6.dp else 10.dp,
+                vertical = if (isCompact) 2.dp else 2.dp
+            )
         )
+    }
+}
+
+@Composable
+fun GradeDetailsDialog(
+    grade: Grade,
+    onDismiss: () -> Unit
+) {
+    val themeSettings by YouSchoolApp.instance.themeManager.themeSettings.collectAsState()
+    val (bgColor, textColor) = remember(grade.value, grade.weight, themeSettings) {
+        GradeColorCalculator.calculateGradeColor(grade.value, grade.weight, themeSettings)
+    }
+
+    val gradeTitle = remember(grade.value) {
+        when (grade.value) {
+            "5" -> "Отлично"
+            "4" -> "Хорошо"
+            "3" -> "Удовлетворительно"
+            "2" -> "Неудовлетворительно"
+            "1" -> "Плохо"
+            "Н", "н" -> "Не был на уроке"
+            "Д", "д" -> "Домашнее задание"
+            else -> "Оценка ${grade.value}"
+        }
+    }
+
+    val weightStr = if (grade.weight % 1.0 == 0.0) grade.weight.toInt().toString() else "${grade.weight}"
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Surface(
+                    shape = MaterialTheme.shapes.medium,
+                    color = bgColor,
+                    modifier = Modifier.size(46.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = grade.value,
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = textColor
+                        )
+                    }
+                }
+                Column {
+                    Text(
+                        text = gradeTitle,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = grade.subjectName,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                if (grade.typeName.isNotBlank()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Вид работы",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                        Text(
+                            text = grade.typeName,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Вес оценки",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                    Surface(
+                        shape = MaterialTheme.shapes.extraSmall,
+                        color = MaterialTheme.colorScheme.primaryContainer
+                    ) {
+                        Text(
+                            text = "$weightStr (коэффициент)",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+
+                if (grade.teacherName.isNotBlank()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Учитель",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                        Text(
+                            text = grade.teacherName,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+
+                val formattedDate = formatScheduleGradeDate(grade.date)
+                if (formattedDate.isNotBlank()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Дата выставления",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                        Text(
+                            text = formattedDate,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Понятно")
+            }
+        }
+    )
+}
+
+private fun formatScheduleGradeDate(rawDate: String): String {
+    if (rawDate.isBlank()) return ""
+    return try {
+        val parser = if (rawDate.contains("T")) {
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault())
+        } else {
+            SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        }
+        val date = parser.parse(rawDate) ?: return rawDate.substringBefore("T")
+        val formatter = SimpleDateFormat("d MMMM yyyy", Locale("ru"))
+        formatter.format(date)
+    } catch (e: Exception) {
+        rawDate.substringBefore("T")
     }
 }

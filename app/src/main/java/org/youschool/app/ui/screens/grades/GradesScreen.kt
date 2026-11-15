@@ -522,6 +522,7 @@ fun NewGradesSection(
                                 GradeBadge(
                                     mark = g.value,
                                     weight = g.weight,
+                                    showWeightSuperscript = true,
                                     modifier = Modifier.padding(start = 4.dp)
                                 )
                             }
@@ -665,7 +666,7 @@ fun NewGradeDismissibleItem(
                     )
                 }
 
-                GradeBadge(mark = grade.value, weight = grade.weight)
+                GradeBadge(mark = grade.value, weight = grade.weight, showWeightSuperscript = true)
             }
         }
     }
@@ -917,11 +918,11 @@ fun SubjectGradeCard(
                 ) {
                     // Show simulated marks first
                     simulatedGrades.take(2).forEach { sim ->
-                        GradeBadge(mark = sim.displayValue, weight = sim.weight)
+                        GradeBadge(mark = sim.displayValue, weight = sim.weight, showWeightSuperscript = true)
                     }
                     val remainingReal = activeRealGrades.take(5 - simulatedGrades.take(2).size)
                     remainingReal.forEach { g ->
-                        GradeBadge(mark = g.value, weight = g.weight)
+                        GradeBadge(mark = g.value, weight = g.weight, showWeightSuperscript = true)
                     }
                     val totalDisplayCount = activeRealGrades.size + simulatedGrades.size
                     val shownCount = simulatedGrades.take(2).size + remainingReal.size
