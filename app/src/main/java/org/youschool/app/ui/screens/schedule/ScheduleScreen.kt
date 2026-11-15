@@ -3,6 +3,7 @@ package org.youschool.app.ui.screens.schedule
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -248,7 +249,10 @@ fun ScheduleScreen(
                             Text("Сегодня", style = MaterialTheme.typography.labelMedium)
                         }
                     }
-                    IconButton(onClick = { viewModel.refreshDay(dayPagerState.currentPage) }) {
+                    IconButton(onClick = {
+                        haptic.click()
+                        viewModel.refreshDay(dayPagerState.currentPage)
+                    }) {
                         Icon(Icons.Rounded.Refresh, contentDescription = "Обновить")
                     }
                 },
@@ -314,6 +318,36 @@ fun ScheduleScreen(
                         }
                     }
                 } else {
+                    val currentLessons = lessons!!
+                    val slotItems = remember(currentLessons) {
+                        val beforeLessons = currentLessons.filter { it.numInDay <= 0 }
+                        val regularLessons = currentLessons.filter { it.numInDay > 0 }
+                        val list = mutableListOf<ScheduleSlotItem>()
+
+                        // Extracurricular or preparatory items (numInDay <= 0)
+                        beforeLessons.forEach { lesson ->
+                            list.add(ScheduleSlotItem.RealLesson(lesson))
+                        }
+
+                        // Regular lessons 1..maxSlot with placeholders for missing slots
+                        if (regularLessons.isNotEmpty()) {
+                            val maxSlot = regularLessons.maxOf { it.numInDay }
+                            val lessonsByNum = regularLessons.groupBy { it.numInDay }
+                            for (slot in 1..maxSlot) {
+                                val inSlot = lessonsByNum[slot]
+                                if (inSlot.isNullOrEmpty()) {
+                                    list.add(ScheduleSlotItem.EmptySlot(slot))
+                                } else {
+                                    inSlot.forEach { lesson ->
+                                        list.add(ScheduleSlotItem.RealLesson(lesson))
+                                    }
+                                }
+                            }
+                        }
+
+                        list
+                    }
+
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(
@@ -324,30 +358,46 @@ fun ScheduleScreen(
                         ),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(lessons!!, key = { it.id }) { lesson ->
-                            LessonCard(
-                                lesson = lesson,
-                                downloadingFileId = downloadingFileId,
-                                isHomeworkExpanded = expandedHomeworkIds.contains(lesson.id),
-                                onToggleHomeworkExpand = {
-                                    expandedHomeworkIds = if (expandedHomeworkIds.contains(lesson.id)) {
-                                        expandedHomeworkIds - lesson.id
-                                    } else {
-                                        expandedHomeworkIds + lesson.id
-                                    }
-                                },
-                                onToggleHomework = {
-                                    haptic.tick()
-                                    viewModel.toggleHomework(lesson.id, lesson.isHomeworkDone)
-                                },
-                                onAttachmentClick = { attachment ->
-                                    viewModel.openAttachment(context, attachment)
-                                },
-                                onSubmissionClick = {
-                                    haptic.click()
-                                    selectedLessonForSubmission = lesson
+                        items(
+                            items = slotItems,
+                            key = { item ->
+                                when (item) {
+                                    is ScheduleSlotItem.RealLesson -> "lesson_${item.lesson.id}"
+                                    is ScheduleSlotItem.EmptySlot -> "empty_${item.numInDay}"
                                 }
-                            )
+                            }
+                        ) { item ->
+                            when (item) {
+                                is ScheduleSlotItem.RealLesson -> {
+                                    val lesson = item.lesson
+                                    LessonCard(
+                                        lesson = lesson,
+                                        downloadingFileId = downloadingFileId,
+                                        isHomeworkExpanded = expandedHomeworkIds.contains(lesson.id),
+                                        onToggleHomeworkExpand = {
+                                            expandedHomeworkIds = if (expandedHomeworkIds.contains(lesson.id)) {
+                                                expandedHomeworkIds - lesson.id
+                                            } else {
+                                                expandedHomeworkIds + lesson.id
+                                            }
+                                        },
+                                        onToggleHomework = {
+                                            haptic.tick()
+                                            viewModel.toggleHomework(lesson.id, lesson.isHomeworkDone)
+                                        },
+                                        onAttachmentClick = { attachment ->
+                                            viewModel.openAttachment(context, attachment)
+                                        },
+                                        onSubmissionClick = {
+                                            haptic.click()
+                                            selectedLessonForSubmission = lesson
+                                        }
+                                    )
+                                }
+                                is ScheduleSlotItem.EmptySlot -> {
+                                    EmptyLessonCard(numInDay = item.numInDay)
+                                }
+                            }
                         }
                     }
                 }
@@ -438,6 +488,57 @@ fun WeekCarouselBar(
     }
 }
 
+private sealed interface ScheduleSlotItem {
+    data class RealLesson(val lesson: Lesson) : ScheduleSlotItem
+    data class EmptySlot(val numInDay: Int) : ScheduleSlotItem
+}
+
+@Composable
+fun EmptyLessonCard(numInDay: Int) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)
+        ),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                modifier = Modifier.size(28.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "$numInDay",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Text(
+                text = "Урок не указан",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.outline
+            )
+        }
+    }
+}
+
 @Composable
 fun LessonCard(
     lesson: Lesson,
@@ -478,12 +579,21 @@ fun LessonCard(
                         modifier = Modifier.size(28.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Text(
-                                text = "${lesson.numInDay}",
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
+                            if (lesson.numInDay > 0) {
+                                Text(
+                                    text = "${lesson.numInDay}",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Rounded.AutoAwesome,
+                                    contentDescription = "Внеурочная деятельность",
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
                         }
                     }
 

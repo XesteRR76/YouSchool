@@ -193,7 +193,10 @@ fun GradesScreen(
                             }
                         }
                     }
-                    IconButton(onClick = { viewModel.refresh() }) {
+                    IconButton(onClick = {
+                        haptic.click()
+                        viewModel.refresh()
+                    }) {
                         Icon(Icons.Rounded.Refresh, contentDescription = "Обновить")
                     }
                 }
