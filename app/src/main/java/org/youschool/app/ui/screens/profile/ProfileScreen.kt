@@ -1,5 +1,9 @@
 package org.youschool.app.ui.screens.profile
 
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -19,9 +23,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import org.youschool.app.domain.repository.SchoolRepository
 import org.youschool.app.ui.screens.schedule.GradeBadge
 import org.youschool.app.ui.theme.*
@@ -39,6 +45,19 @@ fun ProfileScreen(
     val themeSettings by themeManager.themeSettings.collectAsState()
     val scrollState = rememberScrollState()
     val haptic = rememberHaptic()
+    val context = LocalContext.current
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            haptic.confirm()
+            themeManager.setNotificationsEnabled(true)
+        } else {
+            haptic.tick()
+            themeManager.setNotificationsEnabled(false)
+        }
+    }
 
     // State for color picker dialog
     var colorPickerTarget by remember { mutableStateOf<String?>(null) } // "5", "4", "3", "2", "1", "start", "end"
@@ -395,7 +414,71 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 3. Окрашивание оценок
+            // 3. Уведомления
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.large,
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.NotificationsActive, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(text = "Уведомления", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Присылать уведомления о новых оценках",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "Периодически проверять электронный журнал в фоне и присылать уведомление сразу при появлении новых оценок",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Switch(
+                            checked = themeSettings.areNotificationsEnabled,
+                            onCheckedChange = { enable ->
+                                if (enable) {
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                        val hasPerm = ContextCompat.checkSelfPermission(
+                                            context,
+                                            android.Manifest.permission.POST_NOTIFICATIONS
+                                        ) == PackageManager.PERMISSION_GRANTED
+                                        if (hasPerm) {
+                                            haptic.click()
+                                            themeManager.setNotificationsEnabled(true)
+                                        } else {
+                                            permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                                        }
+                                    } else {
+                                        haptic.click()
+                                        themeManager.setNotificationsEnabled(true)
+                                    }
+                                } else {
+                                    haptic.click()
+                                    themeManager.setNotificationsEnabled(false)
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 4. Окрашивание оценок
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.large,

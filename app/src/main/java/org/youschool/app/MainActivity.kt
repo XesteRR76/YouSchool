@@ -1,5 +1,6 @@
 package org.youschool.app
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -52,9 +53,12 @@ import org.youschool.app.ui.theme.YouSchoolTheme
 import org.youschool.app.ui.util.rememberHaptic
 
 class MainActivity : ComponentActivity() {
+    private var pendingNavigationRoute by mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        handleNotificationIntent(intent)
 
         val app = application as YouSchoolApp
         val repository = app.repository
@@ -75,6 +79,20 @@ class MainActivity : ComponentActivity() {
                 } else {
                     val navController = rememberNavController()
                     val startDestination = if (repository.isUserLoggedIn()) Screen.Schedule.route else Screen.Auth.route
+
+                    LaunchedEffect(pendingNavigationRoute) {
+                        val route = pendingNavigationRoute
+                        if (route != null && repository.isUserLoggedIn()) {
+                            navController.navigate(route) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                            pendingNavigationRoute = null
+                        }
+                    }
 
                     val navBackStackEntry by navController.currentBackStackEntryAsState()
                     val currentRoute = navBackStackEntry?.destination?.route
@@ -177,6 +195,18 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleNotificationIntent(intent)
+    }
+
+    private fun handleNotificationIntent(intent: Intent?) {
+        if (intent?.getStringExtra("navigate_to") == "grades") {
+            pendingNavigationRoute = Screen.Grades.route
         }
     }
 }

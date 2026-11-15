@@ -40,6 +40,9 @@ interface GradeDao {
     @Query("SELECT * FROM grades ORDER BY id DESC")
     fun getAllGrades(): Flow<List<GradeEntity>>
 
+    @Query("SELECT * FROM grades")
+    suspend fun getAllGradesSnapshot(): List<GradeEntity>
+
     @Query("SELECT * FROM grades WHERE subject = :subjectName ORDER BY id DESC")
     fun getGradesForSubject(subjectName: String): Flow<List<GradeEntity>>
 

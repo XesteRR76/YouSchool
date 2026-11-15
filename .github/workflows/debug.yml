@@ -31,12 +31,18 @@ jobs:
         env:
           RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
         run: |
-          if [ -n "$RELEASE_KEYSTORE_BASE64" ]; then
-            echo "$RELEASE_KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -di > app/release.jks 2>/dev/null || true
-            if [ ! -s app/release.jks ]; then
-              rm -f app/release.jks
-            fi
-          fi
+          python3 - << 'EOF'
+          import os, base64
+
+          b64 = os.environ.get("RELEASE_KEYSTORE_BASE64", "").strip()
+          if b64:
+              try:
+                  raw = base64.b64decode(b64)
+                  with open("app/release.jks", "wb") as f:
+                      f.write(raw)
+              except Exception:
+                  pass
+          EOF
 
       - name: Run Unit Tests
         run: ./gradlew testDebugUnitTest

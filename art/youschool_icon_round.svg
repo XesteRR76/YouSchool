@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="512" height="512">
+    <defs>
+        <clipPath id="circle_mask">
+            <circle cx="54" cy="54" r="33"/>
+        </clipPath>
+    </defs>
+    <g clip-path="url(#circle_mask)">
+        <rect width="108" height="108" fill="#1C1B1F"/>
+        <!-- Stem -->
+        <g transform="translate(54.000, 51.883) rotate(0)">
+            <path d="M 0,-5.890 a 5.890,5.890 0 0 1 5.890,5.890 v 16.895 a 5.890,5.890 0 0 1 -11.780,0 v -16.895 a 5.890,5.890 0 0 1 5.890,-5.890 z" fill="#553491"/>
+        </g>
+        <!-- Right arm -->
+        <g transform="translate(54.000, 54.208) rotate(212)">
+            <path d="M 0,-5.890 a 5.890,5.890 0 0 1 5.890,5.890 v 17.670 a 5.890,5.890 0 0 1 -11.780,0 v -17.670 a 5.890,5.890 0 0 1 5.890,-5.890 z" fill="#D0BCFF"/>
+        </g>
+        <!-- Left arm -->
+        <g transform="translate(54.000, 54.208) rotate(148)">
+            <path d="M 0,-5.890 a 5.890,5.890 0 0 1 5.890,5.890 v 17.670 a 5.890,5.890 0 0 1 -11.780,0 v -17.670 a 5.890,5.890 0 0 1 5.890,-5.890 z" fill="#7C4DFF"/>
+        </g>
+    </g>
+</svg>

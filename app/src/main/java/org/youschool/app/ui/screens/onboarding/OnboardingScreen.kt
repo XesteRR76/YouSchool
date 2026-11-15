@@ -1,5 +1,9 @@
 package org.youschool.app.ui.screens.onboarding
 
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -23,10 +27,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
 import org.youschool.app.ui.screens.schedule.GradeBadge
 import org.youschool.app.ui.theme.*
@@ -39,7 +45,7 @@ fun OnboardingScreen(
     onFinish: () -> Unit
 ) {
     val themeSettings by themeManager.themeSettings.collectAsState()
-    val pagerState = rememberPagerState(initialPage = 0, pageCount = { 3 })
+    val pagerState = rememberPagerState(initialPage = 0, pageCount = { 4 })
     val coroutineScope = rememberCoroutineScope()
     val haptic = rememberHaptic()
 
@@ -103,7 +109,7 @@ fun OnboardingScreen(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        repeat(3) { page ->
+                        repeat(4) { page ->
                             val isSelected = pagerState.currentPage == page
                             Box(
                                 modifier = Modifier
@@ -119,7 +125,7 @@ fun OnboardingScreen(
 
                     Button(
                         onClick = {
-                            if (pagerState.currentPage < 2) {
+                            if (pagerState.currentPage < 3) {
                                 haptic.click()
                                 coroutineScope.launch {
                                     pagerState.animateScrollToPage(pagerState.currentPage + 1)
@@ -132,10 +138,10 @@ fun OnboardingScreen(
                         },
                         shape = MaterialTheme.shapes.medium
                     ) {
-                        Text(if (pagerState.currentPage == 2) "Начать" else "Далее")
+                        Text(if (pagerState.currentPage == 3) "Начать" else "Далее")
                         Spacer(modifier = Modifier.width(6.dp))
                         Icon(
-                            if (pagerState.currentPage == 2) Icons.Rounded.Check else Icons.AutoMirrored.Rounded.ArrowForward,
+                            if (pagerState.currentPage == 3) Icons.Rounded.Check else Icons.AutoMirrored.Rounded.ArrowForward,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp)
                         )
@@ -154,6 +160,7 @@ fun OnboardingScreen(
                 0 -> StepThemeAndPalette(themeManager, themeSettings)
                 1 -> StepGradeColorMode(themeManager, themeSettings)
                 2 -> StepNavigationAndHaptic(themeManager, themeSettings)
+                3 -> StepNotifications(themeManager, themeSettings)
             }
         }
     }
@@ -893,6 +900,222 @@ private fun StepNavigationAndHaptic(
                     onCheckedChange = {
                         themeManager.setHapticFeedbackEnabled(it)
                         if (it) haptic.click()
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StepNotifications(
+    themeManager: ThemeManager,
+    settings: ThemeSettings
+) {
+    val scrollState = rememberScrollState()
+    val haptic = rememberHaptic()
+    val context = LocalContext.current
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            haptic.confirm()
+            themeManager.setNotificationsEnabled(true)
+        } else {
+            haptic.tick()
+            themeManager.setNotificationsEnabled(false)
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .padding(horizontal = 24.dp, vertical = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.primaryContainer,
+            modifier = Modifier.size(72.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.Rounded.NotificationsActive,
+                    contentDescription = null,
+                    modifier = Modifier.size(36.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Уведомления",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = "Получайте мгновенные пуш-уведомления, как только учитель выставит новую оценку в электронный журнал",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.outline,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Visual Preview of a Notification Card
+        Text(
+            text = "Пример уведомления:",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.align(Alignment.Start)
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Surface(
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f),
+            tonalElevation = 4.dp,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Rounded.School,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(12.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "YouSchool",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = " • сейчас",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Новая оценка: Обществознание",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Вес: 1.5 • Самостоятельная работа",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "На урок: 13 ноября",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
+
+                    GradeBadge(mark = "5", weight = 1.5)
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Notification toggle switch card
+        Surface(
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Rounded.NotificationsActive,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = "Присылать уведомления",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Фоновая периодическая проверка журнала",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
+                }
+
+                Switch(
+                    checked = settings.areNotificationsEnabled,
+                    onCheckedChange = { enable ->
+                        if (enable) {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                val hasPerm = ContextCompat.checkSelfPermission(
+                                    context,
+                                    android.Manifest.permission.POST_NOTIFICATIONS
+                                ) == PackageManager.PERMISSION_GRANTED
+                                if (hasPerm) {
+                                    haptic.click()
+                                    themeManager.setNotificationsEnabled(true)
+                                } else {
+                                    permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                                }
+                            } else {
+                                haptic.click()
+                                themeManager.setNotificationsEnabled(true)
+                            }
+                        } else {
+                            haptic.click()
+                            themeManager.setNotificationsEnabled(false)
+                        }
                     }
                 )
             }

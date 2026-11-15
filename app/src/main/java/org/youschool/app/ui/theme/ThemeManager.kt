@@ -72,6 +72,7 @@ data class ThemeSettings(
     val themeMode: AppThemeMode = AppThemeMode.SYSTEM,
     val colorPalette: AppColorPalette = AppColorPalette.MONET,
     val isHapticFeedbackEnabled: Boolean = true,
+    val areNotificationsEnabled: Boolean = true,
     val navBarStyle: NavigationBarStyle = NavigationBarStyle.STANDARD,
     val navBarBottomOffsetDp: Int = 16,
     val gradeColorMode: GradeColorMode = GradeColorMode.BY_VALUE,
@@ -150,7 +151,7 @@ object GradeColorCalculator {
     }
 }
 
-class ThemeManager(context: Context) {
+class ThemeManager(private val context: Context) {
 
     private val prefs: SharedPreferences = context.getSharedPreferences("youschool_theme_prefs", Context.MODE_PRIVATE)
 
@@ -163,6 +164,7 @@ class ThemeManager(context: Context) {
         val navName = prefs.getString("nav_bar_style", NavigationBarStyle.STANDARD.name) ?: NavigationBarStyle.STANDARD.name
         val gradeModeName = prefs.getString("grade_color_mode", GradeColorMode.BY_VALUE.name) ?: GradeColorMode.BY_VALUE.name
         val haptic = prefs.getBoolean("haptic_feedback_enabled", true)
+        val notifications = prefs.getBoolean("notifications_enabled", true)
         val onboarding = prefs.getBoolean("has_completed_onboarding", false)
 
         val mode = try { AppThemeMode.valueOf(modeName) } catch (e: Exception) { AppThemeMode.SYSTEM }
@@ -191,6 +193,7 @@ class ThemeManager(context: Context) {
             themeMode = mode,
             colorPalette = palette,
             isHapticFeedbackEnabled = haptic,
+            areNotificationsEnabled = notifications,
             navBarStyle = navStyle,
             navBarBottomOffsetDp = bottomOffset,
             gradeColorMode = gradeMode,
@@ -241,6 +244,16 @@ class ThemeManager(context: Context) {
     fun setHapticFeedbackEnabled(enabled: Boolean) {
         prefs.edit().putBoolean("haptic_feedback_enabled", enabled).apply()
         _themeSettings.value = _themeSettings.value.copy(isHapticFeedbackEnabled = enabled)
+    }
+
+    fun setNotificationsEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("notifications_enabled", enabled).apply()
+        _themeSettings.value = _themeSettings.value.copy(areNotificationsEnabled = enabled)
+        if (enabled) {
+            org.youschool.app.core.notification.GradesNotificationScheduler.schedule(context)
+        } else {
+            org.youschool.app.core.notification.GradesNotificationScheduler.cancel(context)
+        }
     }
 
     fun setNavigationBarStyle(style: NavigationBarStyle) {

@@ -630,6 +630,19 @@ fun NewGradeDismissibleItem(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
+                val gradeWeightStr = if (grade.weight % 1.0 == 0.0) {
+                    grade.weight.toInt().toString()
+                } else {
+                    String.format(Locale.US, "%.1f", grade.weight)
+                }
+                val subtitleText = buildString {
+                    append("Вес: $gradeWeightStr")
+                    if (grade.typeName.isNotBlank() && grade.typeName.length <= 30 && !grade.typeName.contains(".")) {
+                        append(" • ")
+                        append(grade.typeName)
+                    }
+                }
+
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = grade.subjectName,
@@ -638,15 +651,13 @@ fun NewGradeDismissibleItem(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    if (grade.typeName.isNotBlank()) {
-                        Text(
-                            text = grade.typeName,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                    Text(
+                        text = subtitleText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                     Text(
                         text = buildGradeDatesText(grade.lessonDate, grade.date),
                         style = MaterialTheme.typography.labelSmall,

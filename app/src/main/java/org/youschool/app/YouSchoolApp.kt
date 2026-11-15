@@ -46,6 +46,13 @@ class YouSchoolApp : Application() {
         }
         networkMonitor.start()
 
+        // Initialize notification channel for grade alerts
+        org.youschool.app.core.notification.NotificationHelper.createNotificationChannel(this)
+
+        if (authManager.hasCredentials() && themeManager.themeSettings.value.areNotificationsEnabled) {
+            org.youschool.app.core.notification.GradesNotificationScheduler.schedule(this)
+        }
+
         // Attempt sync of any pending actions on app start
         CoroutineScope(Dispatchers.IO).launch {
             repository.syncPendingHomeworkStatus()

@@ -34,35 +34,41 @@ jobs:
       - name: Prepare Release Keystore
         env:
           RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          if [ -n "$RELEASE_KEYSTORE_BASE64" ]; then
-            echo "Restoring keystore from GitHub Secret..."
-            echo "$RELEASE_KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -di > app/release.jks 2>/dev/null || true
-            if [ ! -s app/release.jks ] || ! keytool -list -keystore app/release.jks -storepass youschool >/dev/null 2>&1; then
-              echo "Warning: Secret RELEASE_KEYSTORE_BASE64 could not be decoded or password differs. Generating fallback keystore..."
-              rm -f app/release.jks
-              keytool -genkeypair -v \
-                -keystore app/release.jks \
-                -alias youschool \
-                -keyalg RSA \
-                -keysize 2048 \
-                -validity 10000 \
-                -storepass youschool \
-                -keypass youschool \
-                -dname "CN=YouSchool, OU=Development, O=YouSchool, L=Moscow, ST=Moscow, C=RU"
-            else
-              echo "Keystore successfully restored and verified from secret."
-            fi
-          elif [ ! -f app/release.jks ]; then
-            echo "Generating release keystore..."
+          python3 - << 'EOF'
+          import os, base64
+
+          b64 = os.environ.get("RELEASE_KEYSTORE_BASE64", "").strip()
+          if b64:
+              try:
+                  raw = base64.b64decode(b64)
+                  with open("app/release.jks", "wb") as f:
+                      f.write(raw)
+                  print("Keystore file written from secret.")
+              except Exception as e:
+                  print(f"Warning: Failed to decode base64: {e}")
+          EOF
+
+          STOREPASS="${KEYSTORE_PASSWORD:-youschool}"
+          ALIAS="${KEY_ALIAS:-youschool}"
+          KEYPASS="${KEY_PASSWORD:-youschool}"
+
+          if [ -s app/release.jks ] && keytool -list -keystore app/release.jks -storepass "$STOREPASS" >/dev/null 2>&1; then
+            echo "Keystore verified successfully."
+          else
+            echo "Generating fallback release keystore..."
+            rm -f app/release.jks
             keytool -genkeypair -v \
               -keystore app/release.jks \
-              -alias youschool \
+              -alias "$ALIAS" \
               -keyalg RSA \
               -keysize 2048 \
               -validity 10000 \
-              -storepass youschool \
-              -keypass youschool \
+              -storepass "$STOREPASS" \
+              -keypass "$KEYPASS" \
               -dname "CN=YouSchool, OU=Development, O=YouSchool, L=Moscow, ST=Moscow, C=RU"
           fi
 
@@ -70,6 +76,10 @@ jobs:
         run: ./gradlew testDebugUnitTest
 
       - name: Build Release APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew assembleRelease
 
       - name: Upload Release APK Artifact

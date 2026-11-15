@@ -4,34 +4,34 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Material You 3-Capsule 'Y' Centered Launcher Foreground -->
-    <!-- 1. Stem Capsule -->
+    <!-- Material You 3-Capsule 'Y' (Calibrated for Circle Mask Keyline) -->
+    <!-- 1. Stem Capsule (Deep Violet) -->
     <group
         android:translateX="54.000"
-        android:translateY="50.619"
+        android:translateY="51.883"
         android:rotation="0">
         <path
             android:fillColor="#553491"
-            android:pathData="M 0,-9.405 a 9.405,9.405 0 0 1 9.405,9.405 v 26.978 a 9.405,9.405 0 0 1 -18.810,0 v -26.978 a 9.405,9.405 0 0 1 9.405,-9.405 z" />
+            android:pathData="M 0,-5.890 a 5.890,5.890 0 0 1 5.890,5.890 v 16.895 a 5.890,5.890 0 0 1 -11.780,0 v -16.895 a 5.890,5.890 0 0 1 5.890,-5.890 z" />
     </group>
 
-    <!-- 2. Right Arm Capsule (Lavender, underneath Left Arm) -->
+    <!-- 2. Right Arm Capsule (Soft Lavender) -->
     <group
         android:translateX="54.000"
-        android:translateY="54.331"
+        android:translateY="54.208"
         android:rotation="212.0">
         <path
             android:fillColor="#D0BCFF"
-            android:pathData="M 0,-9.405 a 9.405,9.405 0 0 1 9.405,9.405 v 28.215 a 9.405,9.405 0 0 1 -18.810,0 v -28.215 a 9.405,9.405 0 0 1 9.405,-9.405 z" />
+            android:pathData="M 0,-5.890 a 5.890,5.890 0 0 1 5.890,5.890 v 17.670 a 5.890,5.890 0 0 1 -11.780,0 v -17.670 a 5.890,5.890 0 0 1 5.890,-5.890 z" />
     </group>
 
-    <!-- 3. Left Arm Capsule (Vivid Purple, overlaps Right Arm and Stem) -->
+    <!-- 3. Left Arm Capsule (Vivid Accent Violet, overlaps Right Arm and Stem) -->
     <group
         android:translateX="54.000"
-        android:translateY="54.331"
+        android:translateY="54.208"
         android:rotation="148.0">
         <path
             android:fillColor="#7C4DFF"
-            android:pathData="M 0,-9.405 a 9.405,9.405 0 0 1 9.405,9.405 v 28.215 a 9.405,9.405 0 0 1 -18.810,0 v -28.215 a 9.405,9.405 0 0 1 9.405,-9.405 z" />
+            android:pathData="M 0,-5.890 a 5.890,5.890 0 0 1 5.890,5.890 v 17.670 a 5.890,5.890 0 0 1 -11.780,0 v -17.670 a 5.890,5.890 0 0 1 5.890,-5.890 z" />
     </group>
 </vector>

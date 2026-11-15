@@ -409,6 +409,7 @@ class SchoolRepositoryImpl(
 
     override fun logout() {
         authManager.clear()
+        org.youschool.app.core.notification.GradesNotificationScheduler.cancel(context)
         context.getSharedPreferences("youschool_prefs", Context.MODE_PRIVATE)
             .edit()
             .remove("has_initialized_grades_read_state")
