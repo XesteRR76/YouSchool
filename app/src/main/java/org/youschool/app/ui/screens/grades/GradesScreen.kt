@@ -4,6 +4,7 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -20,8 +21,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import org.youschool.app.domain.model.Grade
@@ -104,12 +107,19 @@ class GradesViewModel(private val repository: SchoolRepository) : ViewModel() {
     }
 }
 
+data class UndoActionState(
+    val message: String,
+    val totalSeconds: Int = 5,
+    val onUndo: () -> Unit
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GradesScreen(
     viewModel: GradesViewModel,
     modifier: Modifier = Modifier
 ) {
+    val haptic = rememberHaptic()
     val averages by viewModel.subjectAverages.collectAsState()
     val allGrades by viewModel.allGrades.collectAsState()
     val newGrades by viewModel.newGrades.collectAsState()
@@ -129,12 +139,24 @@ fun GradesScreen(
         }
     }
 
-    val snackbarHostState = remember { SnackbarHostState() }
-    val coroutineScope = rememberCoroutineScope()
+    var activeUndoAction by remember { mutableStateOf<UndoActionState?>(null) }
+    var secondsRemaining by remember { mutableIntStateOf(5) }
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
+    LaunchedEffect(activeUndoAction) {
+        val current = activeUndoAction
+        if (current != null) {
+            for (sec in current.totalSeconds downTo 1) {
+                secondsRemaining = sec
+                delay(1000L)
+            }
+            secondsRemaining = 0
+            activeUndoAction = null
+        }
+    }
+
+    Box(modifier = modifier.fillMaxSize()) {
+        Scaffold(
+            topBar = {
             TopAppBar(
                 title = {
                     Text(
@@ -196,31 +218,28 @@ fun GradesScreen(
                     NewGradesSection(
                         newGrades = newGrades,
                         onDismissGrade = { grade ->
-                            viewModel.markGradeAsRead(grade.markKey)
-                            coroutineScope.launch {
-                                val result = snackbarHostState.showSnackbar(
-                                    message = "Оценка по ${grade.subjectName} помечена как прочитанная",
-                                    actionLabel = "Отменить",
-                                    duration = SnackbarDuration.Short
-                                )
-                                if (result == SnackbarResult.ActionPerformed) {
-                                    viewModel.restoreGradeReadStatus(listOf(grade.markKey))
+                            val markKey = grade.markKey
+                            viewModel.markGradeAsRead(markKey)
+                            activeUndoAction = UndoActionState(
+                                message = "Оценка по ${grade.subjectName} прочитана",
+                                totalSeconds = 5,
+                                onUndo = {
+                                    viewModel.restoreGradeReadStatus(listOf(markKey))
                                 }
-                            }
+                            )
+                            secondsRemaining = 5
                         },
                         onDismissAll = {
                             val keys = newGrades.map { it.markKey }
                             viewModel.markAllGradesAsRead()
-                            coroutineScope.launch {
-                                val result = snackbarHostState.showSnackbar(
-                                    message = "Все новые оценки помечены как прочитанные",
-                                    actionLabel = "Отменить",
-                                    duration = SnackbarDuration.Short
-                                )
-                                if (result == SnackbarResult.ActionPerformed) {
+                            activeUndoAction = UndoActionState(
+                                message = "Все новые оценки прочитаны",
+                                totalSeconds = 5,
+                                onUndo = {
                                     viewModel.restoreGradeReadStatus(keys)
                                 }
-                            }
+                            )
+                            secondsRemaining = 5
                         }
                     )
                 }
@@ -293,6 +312,79 @@ fun GradesScreen(
             }
         }
     }
+
+    // Floating Undo Banner positioned safely above the navigation bar with countdown
+    AnimatedVisibility(
+        visible = activeUndoAction != null,
+        enter = slideInVertically(initialOffsetY = { it * 2 }) + fadeIn(),
+        exit = slideOutVertically(targetOffsetY = { it * 2 }) + fadeOut(),
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 16.dp + LocalBottomBarPadding.current)
+    ) {
+        activeUndoAction?.let { undoState ->
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.inverseSurface,
+                contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+                tonalElevation = 6.dp,
+                shadowElevation = 8.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, top = 10.dp, bottom = 10.dp, end = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = undoState.message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.inverseOnSurface,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Button(
+                        onClick = {
+                            haptic.confirm()
+                            undoState.onUndo()
+                            activeUndoAction = null
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.inversePrimary,
+                            contentColor = MaterialTheme.colorScheme.inverseSurface
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = "Отменить (${secondsRemaining}с)",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    IconButton(
+                        onClick = { activeUndoAction = null },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Rounded.Close,
+                            contentDescription = "Закрыть",
+                            tint = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.7f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -362,7 +454,7 @@ fun NewGradesSection(
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f, fill = false)
+                        modifier = Modifier.weight(1f)
                     ) {
                         Surface(
                             shape = MaterialTheme.shapes.small,
@@ -390,15 +482,25 @@ fun NewGradesSection(
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Badge(
-                                    containerColor = MaterialTheme.colorScheme.primary,
-                                    contentColor = MaterialTheme.colorScheme.onPrimary
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.defaultMinSize(minWidth = 24.dp, minHeight = 20.dp)
                                 ) {
-                                    Text(
-                                        "${newGrades.size}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        modifier = Modifier.padding(horizontal = 4.dp)
-                                    )
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = "${newGrades.size}",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onPrimary,
+                                            maxLines = 1,
+                                            softWrap = false
+                                        )
+                                    }
                                 }
                             }
                             Text(
@@ -410,11 +512,18 @@ fun NewGradesSection(
                     }
 
                     // Compact preview badges or action buttons
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.End
+                    ) {
                         if (!isExpanded) {
-                            // Show small preview of first 2 marks
+                            // Show small preview of recent marks
                             newGrades.take(2).forEach { g ->
-                                GradeBadge(mark = g.value, weight = g.weight)
+                                GradeBadge(
+                                    mark = g.value,
+                                    weight = g.weight,
+                                    modifier = Modifier.padding(start = 4.dp)
+                                )
                             }
                             Spacer(modifier = Modifier.width(4.dp))
                         } else {
@@ -539,7 +648,7 @@ fun NewGradeDismissibleItem(
                         )
                     }
                     Text(
-                        text = formatRelativeGradeDate(grade.date),
+                        text = buildGradeDatesText(grade.lessonDate, grade.date),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.outline
                     )
@@ -548,6 +657,46 @@ fun NewGradeDismissibleItem(
                 GradeBadge(mark = grade.value, weight = grade.weight)
             }
         }
+    }
+}
+
+fun buildGradeDatesText(lessonDate: String, markDate: String): String {
+    val lessonDay = formatGradeDisplayDate(lessonDate)
+    val markRelative = formatRelativeGradeDate(markDate)
+
+    return if (lessonDay.isNotBlank() && markDate.isNotBlank()) {
+        val lessonIsoDay = lessonDate.substringBefore("T")
+        val markIsoDay = markDate.substringBefore("T")
+        if (lessonIsoDay == markIsoDay) {
+            "На урок: $lessonDay ($markRelative)"
+        } else {
+            "На урок: $lessonDay • Поставлена: $markRelative"
+        }
+    } else if (lessonDay.isNotBlank()) {
+        "На урок: $lessonDay"
+    } else {
+        "Поставлена: $markRelative"
+    }
+}
+
+fun formatMarkPostingInfo(lessonDate: String, markDate: String): String? {
+    if (markDate.isBlank()) return null
+    val lessonDay = lessonDate.substringBefore("T")
+    val markDay = markDate.substringBefore("T")
+    val relative = formatRelativeGradeDate(markDate)
+    return if (lessonDay.isNotBlank() && lessonDay == markDay) {
+        try {
+            val parser = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault())
+            val date = parser.parse(markDate)
+            if (date != null) {
+                val timeStr = SimpleDateFormat("HH:mm", Locale.getDefault()).format(date)
+                if (timeStr != "00:00") "Поставлена в $timeStr" else null
+            } else null
+        } catch (e: Exception) {
+            null
+        }
+    } else {
+        "Поставлена: $relative"
     }
 }
 
@@ -868,7 +1017,9 @@ fun SubjectGradeCard(
                             } else {
                                 String.format(Locale.US, "%.1f", g.weight)
                             }
-                            val dateStr = formatGradeDisplayDate(g.date)
+                            val lessonDay = formatGradeDisplayDate(g.lessonDate)
+                            val primaryDateStr = if (lessonDay.isNotBlank()) "Урок: $lessonDay" else formatGradeDisplayDate(g.date)
+                            val postingInfo = formatMarkPostingInfo(g.lessonDate, g.date)
 
                             Row(
                                 modifier = Modifier
@@ -879,7 +1030,7 @@ fun SubjectGradeCard(
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = "Вес: $gradeWeightStr • $dateStr",
+                                        text = "Вес: $gradeWeightStr • $primaryDateStr",
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.SemiBold,
                                         color = if (isExcluded) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface,
@@ -891,12 +1042,19 @@ fun SubjectGradeCard(
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.error
                                         )
-                                    } else if (g.typeName.isNotBlank() && g.typeName.length <= 30 && !g.typeName.contains(".")) {
-                                        Text(
-                                            text = g.typeName,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.outline
-                                        )
+                                    } else {
+                                        val subtitleParts = listOfNotNull(
+                                            g.typeName.takeIf { it.isNotBlank() && it.length <= 30 && !it.contains(".") },
+                                            postingInfo
+                                        ).joinToString(" • ")
+
+                                        if (subtitleParts.isNotBlank()) {
+                                            Text(
+                                                text = subtitleParts,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.outline
+                                            )
+                                        }
                                     }
                                 }
                                 GradeBadge(

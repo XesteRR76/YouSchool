@@ -16,6 +16,7 @@ data class GradeDto(
     val markVal: String? = null,
     val markNum: Double? = null,
     val markDate: String? = null,
+    val startDt: String? = null,
     val lptName: String? = null,
     val teachFio: String? = null
 )

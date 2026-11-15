@@ -271,11 +271,27 @@ class SchoolRepositoryImpl(
                         markVal = dto.markVal ?: "",
                         markNum = actualMark,
                         markDate = dto.markDate ?: "",
+                        lessonDate = dto.startDt ?: "",
                         workType = dto.lptName ?: "",
                         teacherFio = dto.teachFio ?: ""
                     )
                 }
+                val prefs = context.getSharedPreferences("youschool_prefs", Context.MODE_PRIVATE)
+                val isFirstGradesSync = !prefs.getBoolean("has_initialized_grades_read_state", false)
+
                 database.gradeDao().replaceAllGrades(entities)
+
+                if (isFirstGradesSync && entities.isNotEmpty()) {
+                    // On first launch / initial sync, mark all existing past grades as already read
+                    // so that only genuinely new grades added in subsequent syncs will be shown in "Новые оценки"
+                    val readEntities = entities.map { entity ->
+                        val key = "${entity.lessonId ?: 0}_${entity.markDate}_${entity.markVal}"
+                        ReadGradeEntity(key)
+                    }
+                    database.readGradeDao().markAsRead(readEntities)
+                    prefs.edit().putBoolean("has_initialized_grades_read_state", true).apply()
+                }
+
                 Result.success(Unit)
             } else {
                 Result.failure(gradesResult.exceptionOrNull() ?: Exception("Ошибка загрузки оценок"))
@@ -393,6 +409,10 @@ class SchoolRepositoryImpl(
 
     override fun logout() {
         authManager.clear()
+        context.getSharedPreferences("youschool_prefs", Context.MODE_PRIVATE)
+            .edit()
+            .remove("has_initialized_grades_read_state")
+            .apply()
     }
 
     override suspend fun markGradeAsRead(markKey: String) {
@@ -487,6 +507,7 @@ class SchoolRepositoryImpl(
             numericValue = markNum,
             weight = weight,
             date = markDate,
+            lessonDate = lessonDate,
             typeName = workType,
             teacherName = teacherFio,
             markKey = key,

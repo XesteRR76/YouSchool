@@ -121,4 +121,26 @@ class CalculationUnitTest {
         assertEquals(3, getTabIndex(0.70f, 3))
         assertEquals(3, getTabIndex(0.95f, 3))
     }
+
+    @Test
+    fun testGradeDatesFormatting() {
+        val lessonDate = "2026-11-13T00:00:00"
+        val markDateDifferentDay = "2026-11-15T12:44:00"
+        val markDateSameDay = "2026-11-13T14:20:00"
+
+        val lessonFormatted = org.youschool.app.ui.screens.grades.formatGradeDisplayDate(lessonDate)
+        assertEquals("13 ноября", lessonFormatted)
+
+        val newGradesTextDiff = org.youschool.app.ui.screens.grades.buildGradeDatesText(lessonDate, markDateDifferentDay)
+        assertTrue(newGradesTextDiff.startsWith("На урок: 13 ноября • Поставлена: "))
+
+        val newGradesTextSame = org.youschool.app.ui.screens.grades.buildGradeDatesText(lessonDate, markDateSameDay)
+        assertTrue(newGradesTextSame.startsWith("На урок: 13 ноября ("))
+
+        val postingInfoDiff = org.youschool.app.ui.screens.grades.formatMarkPostingInfo(lessonDate, markDateDifferentDay)
+        assertTrue(postingInfoDiff != null && postingInfoDiff.startsWith("Поставлена: "))
+
+        val postingInfoSame = org.youschool.app.ui.screens.grades.formatMarkPostingInfo(lessonDate, markDateSameDay)
+        assertEquals("Поставлена в 14:20", postingInfoSame)
+    }
 }

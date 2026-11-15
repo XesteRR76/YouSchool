@@ -563,7 +563,9 @@ fun GradeCalculatorBottomSheet(
                     } else {
                         String.format(Locale.US, "%.1f", grade.weight)
                     }
-                    val dateStr = formatGradeDisplayDate(grade.date)
+                    val lessonDay = formatGradeDisplayDate(grade.lessonDate)
+                    val primaryDateStr = if (lessonDay.isNotBlank()) "Урок: $lessonDay" else formatGradeDisplayDate(grade.date)
+                    val postingInfo = formatMarkPostingInfo(grade.lessonDate, grade.date)
 
                     Surface(
                         shape = MaterialTheme.shapes.medium,
@@ -611,7 +613,7 @@ fun GradeCalculatorBottomSheet(
 
                                 Column {
                                     Text(
-                                        text = "Вес: $gradeWeightStr • $dateStr",
+                                        text = "Вес: $gradeWeightStr • $primaryDateStr",
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.SemiBold,
                                         color = if (isExcluded) {
@@ -621,9 +623,14 @@ fun GradeCalculatorBottomSheet(
                                         },
                                         textDecoration = if (isExcluded) TextDecoration.LineThrough else TextDecoration.None
                                     )
-                                    if (grade.typeName.isNotBlank() && grade.typeName.length <= 30 && !grade.typeName.contains(".")) {
+                                    val subtitleParts = listOfNotNull(
+                                        grade.typeName.takeIf { it.isNotBlank() && it.length <= 30 && !it.contains(".") },
+                                        postingInfo
+                                    ).joinToString(" • ")
+
+                                    if (subtitleParts.isNotBlank()) {
                                         Text(
-                                            text = grade.typeName,
+                                            text = subtitleParts,
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.outline,
                                             textDecoration = if (isExcluded) TextDecoration.LineThrough else TextDecoration.None

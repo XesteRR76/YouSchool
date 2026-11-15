@@ -38,6 +38,7 @@ data class Grade(
     val numericValue: Double,
     val weight: Double,
     val date: String,
+    val lessonDate: String = "",
     val typeName: String,
     val teacherName: String,
     val markKey: String = "$lessonId-$date-$value",

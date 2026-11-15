@@ -32,6 +32,7 @@ data class GradeEntity(
     val markVal: String,
     val markNum: Double,
     val markDate: String,
+    val lessonDate: String = "",
     val workType: String,
     val teacherFio: String
 )
