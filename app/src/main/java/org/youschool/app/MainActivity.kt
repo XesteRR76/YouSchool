@@ -11,6 +11,8 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
@@ -29,6 +31,7 @@ import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -41,6 +44,7 @@ import androidx.navigation.compose.rememberNavController
 import org.youschool.app.core.update.AppRelease
 import org.youschool.app.core.update.AppUpdateChecker
 import org.youschool.app.ui.components.UpdateNotificationBanner
+import org.youschool.app.ui.screens.messages.MessagesScreen
 import org.youschool.app.ui.navigation.Screen
 import org.youschool.app.ui.screens.auth.AuthScreen
 import org.youschool.app.ui.screens.auth.AuthViewModel
@@ -113,7 +117,11 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    val isFloatingPill = themeSettings.navBarStyle == NavigationBarStyle.FLOATING_PILL && currentRoute != Screen.Auth.route
+                    val bottomScreens = themeSettings.bottomBarRoutes.mapNotNull { route ->
+                        Screen.allMainScreens.find { it.route == route }
+                    }
+                    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+                    val isFloatingPill = themeSettings.navBarStyle == NavigationBarStyle.FLOATING_PILL && currentRoute != Screen.Auth.route && !imeVisible
                     val bottomBarPadding = if (isFloatingPill) (76.dp + themeSettings.navBarBottomOffsetDp.dp) else 0.dp
 
                     var availableUpdate by remember { mutableStateOf<AppRelease?>(null) }
@@ -135,9 +143,9 @@ class MainActivity : ComponentActivity() {
                         Scaffold(
                             modifier = Modifier.fillMaxSize(),
                             bottomBar = {
-                                if (currentRoute != Screen.Auth.route && themeSettings.navBarStyle == NavigationBarStyle.STANDARD) {
+                                if (currentRoute != Screen.Auth.route && themeSettings.navBarStyle == NavigationBarStyle.STANDARD && !imeVisible) {
                                     NavigationBar {
-                                        Screen.bottomNavScreens.forEach { screen ->
+                                        bottomScreens.forEach { screen ->
                                             NavigationBarItem(
                                                 selected = currentRoute == screen.route,
                                                 onClick = { onTabClick(screen.route) },
@@ -146,7 +154,7 @@ class MainActivity : ComponentActivity() {
                                                         Icon(imageVector = it, contentDescription = screen.title)
                                                     }
                                                 },
-                                                label = { Text(screen.title) }
+                                                label = { Text(screen.title, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                                             )
                                         }
                                     }
@@ -189,10 +197,15 @@ class MainActivity : ComponentActivity() {
                                         HomeworkScreen(viewModel = homeworkViewModel)
                                     }
 
+                                    composable(Screen.Messages.route) {
+                                        MessagesScreen(repository = repository)
+                                    }
+
                                     composable(Screen.Profile.route) {
                                         ProfileScreen(
                                             repository = repository,
                                             themeManager = app.themeManager,
+                                            onNavigate = onTabClick,
                                             onLogout = {
                                                 navController.navigate(Screen.Auth.route) {
                                                     popUpTo(0) { inclusive = true }
@@ -207,6 +220,7 @@ class MainActivity : ComponentActivity() {
                         if (isFloatingPill) {
                             FloatingPillNavigationBar(
                                 currentRoute = currentRoute,
+                                screens = bottomScreens,
                                 bottomOffsetDp = themeSettings.navBarBottomOffsetDp,
                                 onNavigate = onTabClick,
                                 modifier = Modifier.align(Alignment.BottomCenter)
@@ -254,8 +268,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleNotificationIntent(intent: Intent?) {
-        if (intent?.getStringExtra("navigate_to") == "grades") {
-            pendingNavigationRoute = Screen.Grades.route
+        pendingNavigationRoute = when (intent?.getStringExtra("navigate_to")) {
+            "grades" -> Screen.Grades.route
+            "homework" -> Screen.Homework.route
+            else -> null
         }
     }
 }
@@ -263,38 +279,28 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun FloatingPillNavigationBar(
     currentRoute: String?,
+    screens: List<Screen> = Screen.bottomNavScreens,
     bottomOffsetDp: Int = 16,
     onNavigate: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val haptic = rememberHaptic()
-    val screens = Screen.bottomNavScreens
     val tabCount = screens.size
     val density = LocalDensity.current
 
     var pillWidthPx by remember { mutableFloatStateOf(0f) }
     var hoveredTabIndex by remember { mutableStateOf<Int?>(null) }
 
-    val currentIndex = remember(currentRoute) {
+    val currentIndex = remember(currentRoute, screens) {
         val idx = screens.indexOfFirst { it.route == currentRoute }
         if (idx != -1) idx else 0
     }
     val effectiveIndex = (hoveredTabIndex ?: currentIndex).coerceIn(0, (tabCount - 1).coerceAtLeast(0))
-    val effectiveRoute = screens.getOrNull(effectiveIndex)?.route ?: screens[0].route
+    val effectiveRoute = if (hoveredTabIndex != null) screens.getOrNull(effectiveIndex)?.route else currentRoute
 
-    fun getTabIndexAt(x: Float, totalWidth: Float, currentSelectedIdx: Int): Int {
-        if (totalWidth <= 0f || tabCount <= 0) return 0
-        val ratio = (x / totalWidth).coerceIn(0f, 0.999f)
-        if (tabCount == 4) {
-            for (i in 0 until 4) {
-                val left = if (i <= currentSelectedIdx) i * 0.20f else (i + 1) * 0.20f
-                val width = if (i == currentSelectedIdx) 0.40f else 0.20f
-                if (ratio >= left && ratio < left + width) {
-                    return i
-                }
-            }
-        }
-        return (ratio * tabCount).toInt().coerceIn(0, tabCount - 1)
+    fun getTabIndexAt(x: Float, totalWidth: Float): Int {
+        val padding = with(density) { 6.dp.toPx() }
+        return org.youschool.app.ui.navigation.BottomBarConfig.tabIndex(x, totalWidth, padding, tabCount)
     }
 
     Box(
@@ -327,10 +333,10 @@ fun FloatingPillNavigationBar(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(32.dp))
                 .onSizeChanged { pillWidthPx = it.width.toFloat() }
-                .pointerInput(currentRoute, pillWidthPx) {
+                .pointerInput(currentRoute, pillWidthPx, screens) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
-                        val initialIndex = getTabIndexAt(down.position.x, pillWidthPx, currentIndex)
+                        val initialIndex = getTabIndexAt(down.position.x, pillWidthPx)
                         hoveredTabIndex = initialIndex
                         haptic.tick()
 
@@ -342,7 +348,7 @@ fun FloatingPillNavigationBar(
                                 break
                             }
                             pointer.consume()
-                            val newIndex = getTabIndexAt(pointer.position.x, pillWidthPx, hoveredTabIndex ?: currentIndex)
+                            val newIndex = getTabIndexAt(pointer.position.x, pillWidthPx)
                             if (newIndex != hoveredTabIndex) {
                                 hoveredTabIndex = newIndex
                                 haptic.tick()
@@ -375,8 +381,8 @@ fun FloatingPillNavigationBar(
             ) {
                 val totalInnerPaddingPx = with(density) { 12.dp.toPx() }
                 val innerWidthPx = (pillWidthPx - totalInnerPaddingPx).coerceAtLeast(0f)
-                val targetLeftPx = if (innerWidthPx > 0f) effectiveIndex * (innerWidthPx * 0.20f) else 0f
-                val capsuleWidthPx = innerWidthPx * 0.40f
+                val targetLeftPx = if (innerWidthPx > 0f) effectiveIndex * (innerWidthPx / tabCount) else 0f
+                val capsuleWidthPx = innerWidthPx / tabCount
 
                 val animatedLeftPx by animateFloatAsState(
                     targetValue = targetLeftPx,
@@ -388,12 +394,12 @@ fun FloatingPillNavigationBar(
                 )
 
                 // Single fluid sliding background indicator!
-                if (innerWidthPx > 0f) {
+                if (innerWidthPx > 0f && screens.any { it.route == currentRoute }) {
                     Box(
                         modifier = Modifier
                             .offset { IntOffset(animatedLeftPx.roundToInt(), 0) }
                             .width(with(density) { capsuleWidthPx.toDp() })
-                            .height(44.dp)
+                            .height(48.dp)
                             .clip(RoundedCornerShape(22.dp))
                             .background(MaterialTheme.colorScheme.primaryContainer)
                     )
@@ -403,7 +409,7 @@ fun FloatingPillNavigationBar(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(44.dp),
+                        .height(48.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     screens.forEachIndexed { index, screen ->
@@ -412,19 +418,12 @@ fun FloatingPillNavigationBar(
                             targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                             label = "pill_content_$index"
                         )
-                        val animatedWeight by animateFloatAsState(
-                            targetValue = if (isSelected) 1.6f else 0.8f,
-                            animationSpec = spring(
-                                stiffness = Spring.StiffnessMediumLow,
-                                dampingRatio = 0.82f
-                            ),
-                            label = "tab_weight_$index"
-                        )
 
                         Box(
                             modifier = Modifier
-                                .weight(animatedWeight)
-                                .fillMaxHeight(),
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .selectable(selected = currentRoute == screen.route, role = Role.Tab, onClick = { onNavigate(screen.route) }),
                             contentAlignment = Alignment.Center
                         ) {
                             Row(
@@ -440,7 +439,7 @@ fun FloatingPillNavigationBar(
                                     )
                                 }
                                 AnimatedVisibility(
-                                    visible = isSelected,
+                                    visible = isSelected && tabCount <= 3,
                                     enter = fadeIn(animationSpec = tween(150)) + expandHorizontally(animationSpec = tween(200)),
                                     exit = fadeOut(animationSpec = tween(100)) + shrinkHorizontally(animationSpec = tween(150))
                                 ) {

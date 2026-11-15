@@ -2,6 +2,11 @@ package org.youschool.app.data.repository
 
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import org.youschool.app.core.notification.NotificationHelper
+import org.youschool.app.core.notification.NotificationRules
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.firstOrNull
@@ -32,7 +37,17 @@ class SchoolRepositoryImpl(
     private val authManager: AuthManager
 ) : SchoolRepository {
 
+    private val syncMutex = Mutex()
     private val json = Json { ignoreUnknownKeys = true }
+
+    override suspend fun getMessageThreads(before: Long?) = apiClient.getMessageThreads(before)
+    override suspend fun getMessageThread(id: Long) = apiClient.getMessageThread(id)
+    override suspend fun getMessages(id: Long, before: Long?) = apiClient.getMessages(id, before)
+    override suspend fun getMessageRecipients() = apiClient.getMessageRecipients()
+    override suspend fun getNoReplyId() = apiClient.getNoReplyId()
+    override suspend fun createPrivateThread(recipientId: Long) = apiClient.createPrivateThread(recipientId)
+    override suspend fun sendMessage(threadId: Long, text: String, uid: String) = apiClient.sendMessage(threadId, text, uid)
+    override suspend fun markMessageRead(id: Long) = apiClient.markMessageRead(id)
 
     override fun getLessonsForDay(dateMillis: Long): Flow<List<Lesson>> {
         val calendar = Calendar.getInstance().apply {
@@ -159,145 +174,160 @@ class SchoolRepositoryImpl(
     }
 
     override suspend fun syncDayLessons(dateMillis: Long): Result<Unit> = withContext(Dispatchers.IO) {
-        val userId = authManager.getUserId()
-        if (userId <= 0) return@withContext Result.failure(Exception("Пользователь не авторизован"))
+        syncMutex.withLock {
+            val userId = authManager.getUserId()
+            if (userId <= 0) return@withContext Result.failure(Exception("Пользователь не авторизован"))
 
-        val calendar = Calendar.getInstance().apply {
-            timeInMillis = dateMillis
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
-        val startOfDay = calendar.timeInMillis
-        calendar.add(Calendar.DAY_OF_YEAR, 1)
-        val endOfDay = calendar.timeInMillis
-        val syncStart = startOfDay - 7 * 86400000L
-        val syncEnd = endOfDay + 7 * 86400000L
-
-        try {
-            val response = apiClient.getDiary(userId, syncStart, syncEnd)
-            if (response.isSuccess) {
-                val lessonsDto = response.getOrNull()?.lesson ?: emptyList()
-                val entities = lessonsDto.map { dto ->
-                    var homeworkText = ""
-                    val filesList = mutableListOf<FileDto>()
-                    var homeworkPartId: Long? = null
-                    var isServerDone: Boolean? = null
-
-                    for (part in dto.part) {
-                        if (part.cat == "DZ") {
-                            homeworkPartId = part.id
-                            if (part.ready != null) {
-                                isServerDone = (part.ready == 1)
-                            }
-                            for (v in part.variant) {
-                                if (!v.text.isNullOrBlank()) {
-                                    val cleanText = android.text.Html.fromHtml(v.text, android.text.Html.FROM_HTML_MODE_COMPACT).toString().trim()
-                                    homeworkText += (if (homeworkText.isNotEmpty()) "\n" else "") + cleanText
-                                }
-                                for (f in v.file) {
-                                    filesList.add(f.copy(variantId = v.id))
-                                }
-                            }
-                        }
-                    }
-
-                    // Two-way sync: if server has a status for this homework and local user hasn't queued an offline change, reflect server status
-                    if (homeworkPartId != null && isServerDone != null) {
-                        val pending = database.pendingHomeworkSyncDao().getPendingByPartId(homeworkPartId)
-                        if (pending == null) {
-                            database.homeworkStatusDao().setStatus(
-                                HomeworkStatusEntity(dto.id, isServerDone)
-                            )
-                        }
-                    }
-
-                    LessonEntity(
-                        id = dto.id,
-                        dateMillis = dto.date ?: startOfDay,
-                        numInDay = dto.numInDay,
-                        subjectId = dto.unit?.id,
-                        subjectName = dto.unit?.name ?: "Урок",
-                        subjectShort = dto.unit?.short ?: dto.unit?.name ?: "Урок",
-                        topic = dto.tp?.topicName ?: "",
-                        teacherName = dto.teacher?.factTeacherIN ?: "",
-                        homeworkText = homeworkText,
-                        homeworkFilesJson = json.encodeToString(filesList),
-                        gradeValue = null,
-                        gradeWeight = null,
-                        homeworkPartId = homeworkPartId
-                    )
-                }
-
-                database.lessonDao().replaceLessonsForRange(syncStart, syncEnd, entities)
-                Result.success(Unit)
-            } else {
-                Result.failure(response.exceptionOrNull() ?: Exception("Ошибка загрузки расписания"))
+            val calendar = Calendar.getInstance().apply {
+                timeInMillis = dateMillis
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
             }
-        } catch (e: Exception) {
-            Result.failure(e)
+            val startOfDay = calendar.timeInMillis
+            calendar.add(Calendar.DAY_OF_YEAR, 1)
+            val endOfDay = calendar.timeInMillis
+            val syncStart = startOfDay - 7 * 86400000L
+            val syncEnd = endOfDay + 7 * 86400000L
+
+            try {
+                val response = apiClient.getDiary(userId, syncStart, syncEnd)
+                if (response.isSuccess) {
+                    if (authManager.getUserId() != userId) return@withContext Result.failure(Exception("Аккаунт изменился"))
+                    val lessonsDto = response.getOrNull()?.lesson ?: emptyList()
+                    val entities = lessonsDto.map { dto ->
+                        var homeworkText = ""
+                        val filesList = mutableListOf<FileDto>()
+                        var homeworkPartId: Long? = null
+                        var isServerDone: Boolean? = null
+
+                        for (part in dto.part) {
+                            if (part.cat == "DZ") {
+                                homeworkPartId = part.id
+                                if (part.ready != null) {
+                                    isServerDone = (part.ready == 1)
+                                }
+                                for (v in part.variant) {
+                                    if (!v.text.isNullOrBlank()) {
+                                        val cleanText = android.text.Html.fromHtml(v.text, android.text.Html.FROM_HTML_MODE_COMPACT).toString().trim()
+                                        homeworkText += (if (homeworkText.isNotEmpty()) "\n" else "") + cleanText
+                                    }
+                                    for (f in v.file) {
+                                        filesList.add(f.copy(variantId = v.id))
+                                    }
+                                }
+                            }
+                        }
+
+                        // Two-way sync: if server has a status for this homework and local user hasn't queued an offline change, reflect server status
+                        if (homeworkPartId != null && isServerDone != null) {
+                            val pending = database.pendingHomeworkSyncDao().getPendingByPartId(homeworkPartId)
+                            if (pending == null) {
+                                database.homeworkStatusDao().setStatus(
+                                    HomeworkStatusEntity(dto.id, isServerDone)
+                                )
+                            }
+                        }
+
+                        LessonEntity(
+                            id = dto.id,
+                            dateMillis = dto.date ?: startOfDay,
+                            numInDay = dto.numInDay,
+                            subjectId = dto.unit?.id,
+                            subjectName = dto.unit?.name ?: "Урок",
+                            subjectShort = dto.unit?.short ?: dto.unit?.name ?: "Урок",
+                            topic = dto.tp?.topicName ?: "",
+                            teacherName = dto.teacher?.factTeacherIN ?: "",
+                            homeworkText = homeworkText,
+                            homeworkFilesJson = json.encodeToString(filesList),
+                            gradeValue = null,
+                            gradeWeight = null,
+                            homeworkPartId = homeworkPartId
+                        )
+                    }
+
+                    database.lessonDao().replaceLessonsForRange(syncStart, syncEnd, entities)
+                    Result.success(Unit)
+                } else {
+                    Result.failure(response.exceptionOrNull() ?: Exception("Ошибка загрузки расписания"))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
         }
     }
 
     override suspend fun syncGrades(): Result<Unit> = withContext(Dispatchers.IO) {
-        val userId = authManager.getUserId()
-        if (userId <= 0) return@withContext Result.failure(Exception("Пользователь не авторизован"))
+        syncMutex.withLock {
+            val userId = authManager.getUserId()
+            if (userId <= 0) return@withContext Result.failure(Exception("Пользователь не авторизован"))
 
-        try {
-            val defaultPeriodResult = apiClient.getDefaultPeriodId(userId)
-            val currentPeriodId = if (defaultPeriodResult.isSuccess) {
-                defaultPeriodResult.getOrThrow()
-            } else {
-                556483L
-            }
+            try {
+                val defaultPeriodResult = apiClient.getDefaultPeriodId(userId)
+                val currentPeriodId = defaultPeriodResult.getOrElse { return@withContext Result.failure(it) }
 
-            // Fetch units to get accurate subject names
-            val unitsResult = apiClient.getDiaryUnits(userId, currentPeriodId)
-            val unitNames = unitsResult.getOrNull()?.result?.associate { (it.unitId ?: 0L) to (it.unitName ?: "") } ?: emptyMap()
+                // Fetch units to get accurate subject names
+                val unitsResult = apiClient.getDiaryUnits(userId, currentPeriodId)
+                val unitNames = unitsResult.getOrNull()?.result?.associate { (it.unitId ?: 0L) to (it.unitName ?: "") } ?: emptyMap()
 
-            val gradesResult = apiClient.getGradesForPeriod(userId, currentPeriodId)
-            if (gradesResult.isSuccess) {
-                val gradesDto = gradesResult.getOrNull()?.result ?: emptyList()
-                val entities = gradesDto.filter { !it.markVal.isNullOrBlank() }.map { dto ->
-                    val actualMark = dto.markVal?.toDoubleOrNull() ?: 0.0
-                    val subjectName = unitNames[dto.unitId] ?: "Предмет"
+                val gradesResult = apiClient.getGradesForPeriod(userId, currentPeriodId)
+                if (gradesResult.isSuccess) {
+                    val gradesDto = gradesResult.getOrNull()?.result ?: emptyList()
+                    val entities = gradesDto.filter { !it.markVal.isNullOrBlank() }.map { dto ->
+                        val actualMark = dto.markVal?.toDoubleOrNull() ?: 0.0
+                        val subjectName = unitNames[dto.unitId] ?: "Предмет"
 
-                    GradeEntity(
-                        lessonId = dto.lessonId ?: 0L,
-                        unitId = dto.unitId,
-                        subject = subjectName,
-                        weight = dto.mktWt ?: 1.0,
-                        markVal = dto.markVal ?: "",
-                        markNum = actualMark,
-                        markDate = dto.markDate ?: "",
-                        lessonDate = dto.startDt ?: "",
-                        workType = dto.lptName ?: "",
-                        teacherFio = dto.teachFio ?: ""
-                    )
-                }
-                val prefs = context.getSharedPreferences("youschool_prefs", Context.MODE_PRIVATE)
-                val isFirstGradesSync = !prefs.getBoolean("has_initialized_grades_read_state", false)
-
-                database.gradeDao().replaceAllGrades(entities)
-
-                if (isFirstGradesSync && entities.isNotEmpty()) {
-                    // On first launch / initial sync, mark all existing past grades as already read
-                    // so that only genuinely new grades added in subsequent syncs will be shown in "Новые оценки"
-                    val readEntities = entities.map { entity ->
-                        val key = "${entity.lessonId ?: 0}_${entity.markDate}_${entity.markVal}"
-                        ReadGradeEntity(key)
+                        GradeEntity(
+                            lessonId = dto.lessonId ?: 0L,
+                            unitId = dto.unitId,
+                            subject = subjectName,
+                            weight = dto.mktWt ?: 1.0,
+                            markVal = dto.markVal ?: "",
+                            markNum = actualMark,
+                            markDate = dto.markDate ?: "",
+                            lessonDate = dto.startDt ?: "",
+                            workType = dto.lptName ?: "",
+                            teacherFio = dto.teachFio ?: ""
+                        )
                     }
-                    database.readGradeDao().markAsRead(readEntities)
-                    prefs.edit().putBoolean("has_initialized_grades_read_state", true).apply()
-                }
+                    val prefs = context.getSharedPreferences("youschool_prefs", Context.MODE_PRIVATE)
+                    if (authManager.getUserId() != userId) return@withContext Result.failure(Exception("Аккаунт изменился"))
+                    val initializedKey = "initialized_grades_$userId"
+                    val isFirstGradesSync = !prefs.getBoolean(initializedKey, false)
+                    val notificationPrefs = context.getSharedPreferences("youschool_notification_state", Context.MODE_PRIVATE)
+                    val seenKey = "grades_${userId}_$currentPeriodId"
+                    val keys = entities.associateBy { "${it.unitId}_${it.lessonId}_${it.markDate}_${it.markVal}_${it.workType}" }
+                    val seen = notificationPrefs.getStringSet(seenKey, null)?.toSet()
+                    val newKeys = NotificationRules.newKeys(keys.keys, seen)
 
-                Result.success(Unit)
-            } else {
-                Result.failure(gradesResult.exceptionOrNull() ?: Exception("Ошибка загрузки оценок"))
+                    database.gradeDao().replaceAllGrades(entities)
+
+                    if (isFirstGradesSync) {
+                        // On first launch / initial sync, mark all existing past grades as already read
+                        // so that only genuinely new grades added in subsequent syncs will be shown in "Новые оценки"
+                        val readEntities = entities.map { entity ->
+                            val key = "${entity.lessonId ?: 0}_${entity.markDate}_${entity.markVal}"
+                            ReadGradeEntity(key)
+                        }
+                        database.readGradeDao().markAsRead(readEntities)
+                        prefs.edit().putBoolean(initializedKey, true).apply()
+                    }
+
+                    notificationPrefs.edit().putStringSet(seenKey, (seen.orEmpty() + keys.keys).toSet()).apply()
+                    val settings = (context.applicationContext as org.youschool.app.YouSchoolApp).themeManager.themeSettings.value
+                    if (settings.areNotificationsEnabled && settings.gradeNotificationsEnabled && newKeys.isNotEmpty()) {
+                        NotificationHelper.showNewGradesNotification(context, newKeys.mapNotNull { keys[it] })
+                    }
+                    Result.success(Unit)
+                } else {
+                    Result.failure(gradesResult.exceptionOrNull() ?: Exception("Ошибка загрузки оценок"))
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Result.failure(e)
             }
-        } catch (e: Exception) {
-            Result.failure(e)
         }
     }
 
@@ -386,6 +416,7 @@ class SchoolRepositoryImpl(
             authManager.saveCredentials(login, rawPassword)
             authManager.saveUserInfo(userId, prsId, fullName, school)
 
+            org.youschool.app.core.notification.GradesNotificationScheduler.schedule(context)
             val profile = UserProfile(userId, prsId, fullName, school, role)
             Result.success(profile)
         } else {
@@ -409,6 +440,7 @@ class SchoolRepositoryImpl(
 
     override fun logout() {
         authManager.clear()
+        NotificationHelper.cancelAll(context)
         org.youschool.app.core.notification.GradesNotificationScheduler.cancel(context)
         context.getSharedPreferences("youschool_prefs", Context.MODE_PRIVATE)
             .edit()

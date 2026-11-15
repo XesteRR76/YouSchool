@@ -1,0 +1,83 @@
+package org.youschool.app.features
+
+import kotlinx.serialization.json.Json
+import org.junit.Assert.*
+import org.junit.Test
+import org.youschool.app.ui.navigation.BottomBarConfig
+import org.youschool.app.core.notification.NotificationRules
+import org.youschool.app.domain.model.*
+import java.time.*
+
+class FeatureRulesTest {
+    private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true }
+
+    @Test fun navigationRepairsInvalidPreferencesAndPreservesOrder() {
+        assertEquals(listOf("messages", "profile", "grades"), BottomBarConfig.normalize(listOf("messages", "unknown", "profile", "messages", "grades")))
+        assertEquals(listOf("messages", "profile"), BottomBarConfig.normalize(listOf("messages")))
+        assertEquals(BottomBarConfig.defaults, BottomBarConfig.normalize(emptyList()))
+        assertEquals(5, BottomBarConfig.normalize(BottomBarConfig.available).size)
+    }
+
+    @Test fun floatingBarHitTargetsMatchEverySupportedCount() {
+        for (count in 2..5) {
+            for (index in 0 until count) {
+                val center = 6f + (index + 0.5f) * 300f / count
+                assertEquals(index, BottomBarConfig.tabIndex(center, 312f, 6f, count))
+            }
+            assertEquals(0, BottomBarConfig.tabIndex(-10f, 312f, 6f, count))
+            assertEquals(count - 1, BottomBarConfig.tabIndex(400f, 312f, 6f, count))
+        }
+    }
+
+    @Test fun initialGradeSyncIsSilentEvenWhenEmpty() {
+        assertTrue(NotificationRules.newKeys(setOf("old"), null).isEmpty())
+        assertEquals(setOf("first"), NotificationRules.newKeys(setOf("first"), emptySet()))
+        assertEquals(setOf("new"), NotificationRules.newKeys(setOf("old", "new"), setOf("old")))
+        assertTrue(NotificationRules.newKeys(setOf("old"), setOf("old", "deleted")).isEmpty())
+    }
+
+    @Test fun reminderRunsAfterSelectedTimeOncePerLocalDay() {
+        val day = LocalDate.of(2026, 11, 15)
+        assertFalse(NotificationRules.shouldRemind(day, LocalTime.of(7, 59), 480, null))
+        assertTrue(NotificationRules.shouldRemind(day, LocalTime.of(8, 0), 480, null))
+        assertFalse(NotificationRules.shouldRemind(day, LocalTime.of(22, 0), 480, day.toString()))
+        assertTrue(NotificationRules.shouldRemind(day.plusDays(1), LocalTime.of(8, 0), 480, day.toString()))
+    }
+
+    @Test fun homeworkUsesLocalDueDateAndIgnoresCompletedOrEmptyLessons() {
+        val zone = ZoneId.of("Europe/Moscow")
+        val day = LocalDate.of(2026, 11, 15)
+        val due = Lesson(1, day.atStartOfDay(zone).toInstant().toEpochMilli(), 1, "Алгебра", "Алгебра", "", "", "№1", emptyList())
+        val lessons = listOf(due, due, due.copy(id = 2, isHomeworkDone = true), due.copy(id = 3, homeworkText = ""),
+            due.copy(id = 4, dateMillis = day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()),
+            due.copy(id = 5, homeworkText = "", homeworkFiles = listOf(HomeworkAttachment(1, "task.pdf"))))
+        assertEquals(listOf(1L, 5L), NotificationRules.dueHomework(lessons, day, zone).map { it.id })
+        assertTrue(NotificationRules.dueHomework(listOf(due), day.minusDays(1), zone).isEmpty())
+    }
+
+    @Test fun confirmedMessagePayloadsDecodeWithoutDependingOnExtraFields() {
+        val message = json.decodeFromString<SchoolMessage>("""{"msgId":42,"msgNum":17,"msg":"Текст &lt;пример&gt;","senderFio":"Тестовый пользователь","attachCount":1,"attachInfo":[{"fileId":1}],"notice":false}""")
+        assertEquals(42L, message.msgId)
+        assertEquals(1, message.attachCount)
+        val thread = json.decodeFromString<MessageThread>("""{"threadId":1,"subject":"Класс","dlgType":2,"isAllowReplay":2,"addrCnt":10,"unknown":true}""")
+        assertTrue(thread.canSend(2, 99))
+        assertEquals("Класс", thread.title)
+    }
+
+    @Test fun closedReadOnlyAndSystemThreadsCannotSend() {
+        val thread = MessageThread(1, senderId = 3, dlgType = 2, addrCnt = 10, isAllowReplay = 0)
+        assertFalse(thread.canSend(2, 99))
+        assertTrue(thread.canSend(3, 99))
+        assertFalse(thread.copy(closeDate = 1).canSend(3, 99))
+        assertFalse(thread.copy(addrCnt = 0).canSend(3, 99))
+        assertFalse(thread.canSend(3, 3))
+        assertFalse(MessageThread(1, senderInvalid = true).canSend(2, 99))
+    }
+
+    @Test fun httpSuccessDoesNotMakeRejectedSendSuccessful() {
+        json.decodeFromString<SendMessageResponse>("""{"msgId":42,"prsCount":1,"message":{}}""").requireSuccess()
+        for (response in listOf(SendMessageResponse(-2), SendMessageResponse(42, -3), SendMessageResponse(0))) {
+            assertTrue(runCatching { response.requireSuccess() }.isFailure)
+        }
+    }
+}
