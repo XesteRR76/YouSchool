@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+    <defs>
+        <filter id="glyph_shadow_stem" x="-30%" y="-30%" width="160%" height="160%">
+            <feDropShadow dx="0" dy="8" stdDeviation="7" flood-color="#140033" flood-opacity="0.25"/>
+        </filter>
+        <filter id="glyph_shadow_fold" x="-30%" y="-30%" width="160%" height="160%">
+            <feDropShadow dx="4" dy="5" stdDeviation="6" flood-color="#140033" flood-opacity="0.28"/>
+        </filter>
+        <linearGradient id="g_stem_g" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#553491"/>
+            <stop offset="100%" stop-color="#35176E"/>
+        </linearGradient>
+        <linearGradient id="g_left_g" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#7C4DFF"/>
+            <stop offset="100%" stop-color="#6750A4"/>
+        </linearGradient>
+        <linearGradient id="g_right_g" x1="100%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#D0BCFF"/>
+            <stop offset="100%" stop-color="#B69DF8"/>
+        </linearGradient>
+    </defs>
+
+    <!-- 1. Stem Capsule -->
+    <rect x="-51.30" y="-51.30" width="102.60" height="249.75" rx="51.30" ry="51.30"
+        fill="url(#g_stem_g)"
+        transform="translate(256.00, 237.56) rotate(0)" />
+
+    <!-- 2. Right Arm Capsule -->
+    <rect x="-51.30" y="-51.30" width="102.60" height="256.50" rx="51.30" ry="51.30"
+        fill="url(#g_right_g)"
+        filter="url(#glyph_shadow_stem)"
+        transform="translate(256.00, 257.81) rotate(212.0)" />
+
+    <!-- 3. Left Arm Capsule -->
+    <rect x="-51.30" y="-51.30" width="102.60" height="256.50" rx="51.30" ry="51.30"
+        fill="url(#g_left_g)"
+        filter="url(#glyph_shadow_fold)"
+        transform="translate(256.00, 257.81) rotate(148.0)" />
+</svg>
