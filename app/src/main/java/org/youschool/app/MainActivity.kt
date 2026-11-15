@@ -13,6 +13,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.onClick
+import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.roundToInt
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
@@ -287,20 +294,48 @@ fun FloatingPillNavigationBar(
     val haptic = rememberHaptic()
     val tabCount = screens.size
     val density = LocalDensity.current
+    val coroutineScope = rememberCoroutineScope()
 
     var pillWidthPx by remember { mutableFloatStateOf(0f) }
     var hoveredTabIndex by remember { mutableStateOf<Int?>(null) }
+    var isDragging by remember { mutableStateOf(false) }
+    var dragOffsetPx by remember { mutableFloatStateOf(0f) }
+    val pillOffsetAnimatable = remember { Animatable(0f) }
+    var isFirstLayout by remember { mutableStateOf(true) }
 
     val currentIndex = remember(currentRoute, screens) {
         val idx = screens.indexOfFirst { it.route == currentRoute }
         if (idx != -1) idx else 0
     }
+
+    val totalInnerPaddingPx = with(density) { 12.dp.toPx() }
+    val paddingPx = with(density) { 6.dp.toPx() }
+    val innerWidthPx = (pillWidthPx - totalInnerPaddingPx).coerceAtLeast(0f)
+    val capsuleWidthPx = if (tabCount > 0) innerWidthPx / tabCount else 0f
+
+    LaunchedEffect(currentIndex, capsuleWidthPx) {
+        if (capsuleWidthPx > 0f) {
+            val targetLeft = currentIndex * capsuleWidthPx
+            if (isFirstLayout) {
+                pillOffsetAnimatable.snapTo(targetLeft)
+                isFirstLayout = false
+            } else if (!isDragging && abs(pillOffsetAnimatable.value - targetLeft) > 1f) {
+                pillOffsetAnimatable.animateTo(
+                    targetValue = targetLeft,
+                    animationSpec = spring(
+                        stiffness = Spring.StiffnessMediumLow,
+                        dampingRatio = 0.82f
+                    )
+                )
+            }
+        }
+    }
+
     val effectiveIndex = (hoveredTabIndex ?: currentIndex).coerceIn(0, (tabCount - 1).coerceAtLeast(0))
     val effectiveRoute = if (hoveredTabIndex != null) screens.getOrNull(effectiveIndex)?.route else currentRoute
 
     fun getTabIndexAt(x: Float, totalWidth: Float): Int {
-        val padding = with(density) { 6.dp.toPx() }
-        return org.youschool.app.ui.navigation.BottomBarConfig.tabIndex(x, totalWidth, padding, tabCount)
+        return org.youschool.app.ui.navigation.BottomBarConfig.tabIndex(x, totalWidth, paddingPx, tabCount)
     }
 
     Box(
@@ -334,11 +369,19 @@ fun FloatingPillNavigationBar(
                 .clip(RoundedCornerShape(32.dp))
                 .onSizeChanged { pillWidthPx = it.width.toFloat() }
                 .pointerInput(currentRoute, pillWidthPx, screens) {
+                    if (pillWidthPx <= 0f || tabCount <= 0 || capsuleWidthPx <= 0f) return@pointerInput
+                    val touchSlop = viewConfiguration.touchSlop
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
-                        val initialIndex = getTabIndexAt(down.position.x, pillWidthPx)
-                        hoveredTabIndex = initialIndex
-                        haptic.tick()
+                        val startX = down.position.x
+                        val initialPillLeft = if (isDragging) dragOffsetPx else pillOffsetAnimatable.value
+                        val pillCenter = paddingPx + initialPillLeft + capsuleWidthPx / 2f
+                        val isDownOnActivePill = abs(startX - pillCenter) <= capsuleWidthPx * 0.6f
+
+                        var draggingActive = false
+                        var lastHoveredIndex = org.youschool.app.ui.navigation.BottomBarConfig.nearestTabIndex(
+                            initialPillLeft, capsuleWidthPx, tabCount
+                        )
 
                         val pointerId = down.id
                         while (true) {
@@ -347,19 +390,85 @@ fun FloatingPillNavigationBar(
                             if (pointer == null || !pointer.pressed) {
                                 break
                             }
-                            pointer.consume()
-                            val newIndex = getTabIndexAt(pointer.position.x, pillWidthPx)
-                            if (newIndex != hoveredTabIndex) {
-                                hoveredTabIndex = newIndex
-                                haptic.tick()
+
+                            val dx = pointer.position.x - startX
+                            if (!draggingActive) {
+                                val threshold = if (isDownOnActivePill) 4f else touchSlop
+                                if (abs(dx) > threshold) {
+                                    draggingActive = true
+                                    isDragging = true
+                                    haptic.tick()
+                                }
+                            }
+
+                            if (draggingActive) {
+                                pointer.consume()
+                                val targetLeft = org.youschool.app.ui.navigation.BottomBarConfig.calculatePillTargetLeft(
+                                    isDownOnActivePill = isDownOnActivePill,
+                                    initialPillLeft = initialPillLeft,
+                                    pointerX = pointer.position.x,
+                                    startX = startX,
+                                    paddingPx = paddingPx,
+                                    capsuleWidthPx = capsuleWidthPx,
+                                    innerWidthPx = innerWidthPx
+                                )
+                                dragOffsetPx = targetLeft
+
+                                val currentHoveredIndex = org.youschool.app.ui.navigation.BottomBarConfig.nearestTabIndex(
+                                    targetLeft, capsuleWidthPx, tabCount
+                                )
+                                if (currentHoveredIndex != lastHoveredIndex) {
+                                    lastHoveredIndex = currentHoveredIndex
+                                    hoveredTabIndex = currentHoveredIndex
+                                    haptic.tick()
+                                }
                             }
                         }
 
-                        // Finger released
-                        hoveredTabIndex?.let { selectedIdx ->
-                            val targetRoute = screens.getOrNull(selectedIdx)?.route
+                        // Pointer released (UP)
+                        if (draggingActive) {
+                            val finalLeft = dragOffsetPx
+                            val nearestIndex = org.youschool.app.ui.navigation.BottomBarConfig.nearestTabIndex(
+                                finalLeft, capsuleWidthPx, tabCount
+                            )
+                            val snapTargetLeft = nearestIndex * capsuleWidthPx
+
+                            coroutineScope.launch {
+                                pillOffsetAnimatable.snapTo(finalLeft)
+                                isDragging = false
+                                pillOffsetAnimatable.animateTo(
+                                    targetValue = snapTargetLeft,
+                                    animationSpec = spring(
+                                        stiffness = Spring.StiffnessMediumLow,
+                                        dampingRatio = 0.82f
+                                    )
+                                )
+                            }
+
+                            val targetRoute = screens.getOrNull(nearestIndex)?.route
                             if (targetRoute != null && targetRoute != currentRoute) {
                                 onNavigate(targetRoute)
+                                haptic.click()
+                            }
+                        } else {
+                            // Simple tap
+                            val tappedIndex = getTabIndexAt(startX, pillWidthPx)
+                            val targetRoute = screens.getOrNull(tappedIndex)?.route
+                            val snapTargetLeft = tappedIndex * capsuleWidthPx
+
+                            coroutineScope.launch {
+                                pillOffsetAnimatable.animateTo(
+                                    targetValue = snapTargetLeft,
+                                    animationSpec = spring(
+                                        stiffness = Spring.StiffnessMediumLow,
+                                        dampingRatio = 0.82f
+                                    )
+                                )
+                            }
+
+                            if (targetRoute != null && targetRoute != currentRoute) {
+                                onNavigate(targetRoute)
+                                haptic.click()
                             }
                         }
                         hoveredTabIndex = null
@@ -379,25 +488,14 @@ fun FloatingPillNavigationBar(
                     )
                     .padding(horizontal = 6.dp, vertical = 6.dp)
             ) {
-                val totalInnerPaddingPx = with(density) { 12.dp.toPx() }
-                val innerWidthPx = (pillWidthPx - totalInnerPaddingPx).coerceAtLeast(0f)
-                val targetLeftPx = if (innerWidthPx > 0f) effectiveIndex * (innerWidthPx / tabCount) else 0f
-                val capsuleWidthPx = innerWidthPx / tabCount
-
-                val animatedLeftPx by animateFloatAsState(
-                    targetValue = targetLeftPx,
-                    animationSpec = spring(
-                        stiffness = Spring.StiffnessMediumLow,
-                        dampingRatio = 0.82f
-                    ),
-                    label = "pill_slide"
-                )
-
                 // Single fluid sliding background indicator!
                 if (innerWidthPx > 0f && screens.any { it.route == currentRoute }) {
                     Box(
                         modifier = Modifier
-                            .offset { IntOffset(animatedLeftPx.roundToInt(), 0) }
+                            .offset {
+                                val currentLeft = if (isDragging) dragOffsetPx else pillOffsetAnimatable.value
+                                IntOffset(currentLeft.roundToInt(), 0)
+                            }
                             .width(with(density) { capsuleWidthPx.toDp() })
                             .height(48.dp)
                             .clip(RoundedCornerShape(22.dp))
@@ -423,7 +521,14 @@ fun FloatingPillNavigationBar(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
-                                .selectable(selected = currentRoute == screen.route, role = Role.Tab, onClick = { onNavigate(screen.route) }),
+                                .semantics {
+                                    role = Role.Tab
+                                    selected = currentRoute == screen.route
+                                    onClick {
+                                        onNavigate(screen.route)
+                                        true
+                                    }
+                                },
                             contentAlignment = Alignment.Center
                         ) {
                             Row(

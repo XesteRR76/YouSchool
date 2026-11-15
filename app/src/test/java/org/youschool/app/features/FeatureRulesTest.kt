@@ -29,6 +29,100 @@ class FeatureRulesTest {
         }
     }
 
+    @Test fun floatingBarPillTrackingFollowsFingerDirectlyWithoutJumps() {
+        val count = 4
+        val innerWidth = 320f
+        val capsuleWidth = 80f
+        val padding = 6f
+
+        // When dragging the active pill (which starts at left = 0f, finger pressed at x = 40f):
+        val atStart = BottomBarConfig.calculatePillTargetLeft(
+            isDownOnActivePill = true,
+            initialPillLeft = 0f,
+            pointerX = 40f,
+            startX = 40f,
+            paddingPx = padding,
+            capsuleWidthPx = capsuleWidth,
+            innerWidthPx = innerWidth
+        )
+        // Zero jump on grab!
+        assertEquals(0f, atStart, 0.001f)
+
+        // As finger moves 25px right, pill moves exactly 25px right (smooth 1:1 tracking)
+        val moved25 = BottomBarConfig.calculatePillTargetLeft(
+            isDownOnActivePill = true,
+            initialPillLeft = 0f,
+            pointerX = 65f,
+            startX = 40f,
+            paddingPx = padding,
+            capsuleWidthPx = capsuleWidth,
+            innerWidthPx = innerWidth
+        )
+        assertEquals(25f, moved25, 0.001f)
+
+        // Clamping at right edge (innerWidth - capsuleWidth = 240f)
+        val overshot = BottomBarConfig.calculatePillTargetLeft(
+            isDownOnActivePill = true,
+            initialPillLeft = 0f,
+            pointerX = 400f,
+            startX = 40f,
+            paddingPx = padding,
+            capsuleWidthPx = capsuleWidth,
+            innerWidthPx = innerWidth
+        )
+        assertEquals(240f, overshot, 0.001f)
+
+        // Clamping at left edge (< 0f)
+        val leftOvershot = BottomBarConfig.calculatePillTargetLeft(
+            isDownOnActivePill = true,
+            initialPillLeft = 0f,
+            pointerX = 10f,
+            startX = 40f,
+            paddingPx = padding,
+            capsuleWidthPx = capsuleWidth,
+            innerWidthPx = innerWidth
+        )
+        assertEquals(0f, leftOvershot, 0.001f)
+
+        // When starting drag outside active pill (e.g. finger at tab 2 center: 6 + 160 + 40 = 206f)
+        val dragOutside = BottomBarConfig.calculatePillTargetLeft(
+            isDownOnActivePill = false,
+            initialPillLeft = 0f,
+            pointerX = 206f,
+            startX = 206f,
+            paddingPx = padding,
+            capsuleWidthPx = capsuleWidth,
+            innerWidthPx = innerWidth
+        )
+        assertEquals(160f, dragOutside, 0.001f)
+    }
+
+    @Test fun floatingBarPillSnapsToNearestTabUponRelease() {
+        val count = 4
+        val capsuleWidth = 80f
+
+        // Near tab 0
+        assertEquals(0, BottomBarConfig.nearestTabIndex(0f, capsuleWidth, count))
+        assertEquals(0, BottomBarConfig.nearestTabIndex(39.9f, capsuleWidth, count))
+
+        // Near tab 1 (past 40px midpoint)
+        assertEquals(1, BottomBarConfig.nearestTabIndex(40.1f, capsuleWidth, count))
+        assertEquals(1, BottomBarConfig.nearestTabIndex(80f, capsuleWidth, count))
+        assertEquals(1, BottomBarConfig.nearestTabIndex(119.9f, capsuleWidth, count))
+
+        // Near tab 2
+        assertEquals(2, BottomBarConfig.nearestTabIndex(120.1f, capsuleWidth, count))
+        assertEquals(2, BottomBarConfig.nearestTabIndex(160f, capsuleWidth, count))
+
+        // Near tab 3
+        assertEquals(3, BottomBarConfig.nearestTabIndex(200.1f, capsuleWidth, count))
+        assertEquals(3, BottomBarConfig.nearestTabIndex(240f, capsuleWidth, count))
+
+        // Boundary safety
+        assertEquals(0, BottomBarConfig.nearestTabIndex(-50f, capsuleWidth, count))
+        assertEquals(3, BottomBarConfig.nearestTabIndex(500f, capsuleWidth, count))
+    }
+
     @Test fun initialGradeSyncIsSilentEvenWhenEmpty() {
         assertTrue(NotificationRules.newKeys(setOf("old"), null).isEmpty())
         assertEquals(setOf("first"), NotificationRules.newKeys(setOf("first"), emptySet()))
