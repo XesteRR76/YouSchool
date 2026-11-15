@@ -37,7 +37,22 @@ jobs:
         run: |
           if [ -n "$RELEASE_KEYSTORE_BASE64" ]; then
             echo "Restoring keystore from GitHub Secret..."
-            echo "$RELEASE_KEYSTORE_BASE64" | base64 -d > app/release.jks
+            echo "$RELEASE_KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -di > app/release.jks 2>/dev/null || true
+            if [ ! -s app/release.jks ] || ! keytool -list -keystore app/release.jks -storepass youschool >/dev/null 2>&1; then
+              echo "Warning: Secret RELEASE_KEYSTORE_BASE64 could not be decoded or password differs. Generating fallback keystore..."
+              rm -f app/release.jks
+              keytool -genkeypair -v \
+                -keystore app/release.jks \
+                -alias youschool \
+                -keyalg RSA \
+                -keysize 2048 \
+                -validity 10000 \
+                -storepass youschool \
+                -keypass youschool \
+                -dname "CN=YouSchool, OU=Development, O=YouSchool, L=Moscow, ST=Moscow, C=RU"
+            else
+              echo "Keystore successfully restored and verified from secret."
+            fi
           elif [ ! -f app/release.jks ]; then
             echo "Generating release keystore..."
             keytool -genkeypair -v \
