@@ -85,6 +85,7 @@ data class ThemeSettings(
     val weightGradientSettings: WeightGradientSettings = WeightGradientSettings(),
     val showGradeWeights: Boolean = true,
     val gradeWeightPosition: GradeWeightPosition = GradeWeightPosition.SUPERSCRIPT,
+    val checkForUpdates: Boolean = true,
     val hasCompletedOnboarding: Boolean = false
 )
 
@@ -198,6 +199,7 @@ class ThemeManager(private val context: Context) {
         val showWeights = prefs.getBoolean("show_grade_weights", true)
         val weightPosName = prefs.getString("grade_weight_position", GradeWeightPosition.SUPERSCRIPT.name) ?: GradeWeightPosition.SUPERSCRIPT.name
         val weightPos = try { GradeWeightPosition.valueOf(weightPosName) } catch (e: Exception) { GradeWeightPosition.SUPERSCRIPT }
+        val checkUpdates = prefs.getBoolean("check_for_updates", true)
 
         return ThemeSettings(
             themeMode = mode,
@@ -211,6 +213,7 @@ class ThemeManager(private val context: Context) {
             weightGradientSettings = gradientSettings,
             showGradeWeights = showWeights,
             gradeWeightPosition = weightPos,
+            checkForUpdates = checkUpdates,
             hasCompletedOnboarding = onboarding
         )
     }
@@ -356,6 +359,11 @@ class ThemeManager(private val context: Context) {
     fun setGradeWeightPosition(position: GradeWeightPosition) {
         prefs.edit().putString("grade_weight_position", position.name).apply()
         _themeSettings.value = _themeSettings.value.copy(gradeWeightPosition = position)
+    }
+
+    fun setCheckForUpdates(enabled: Boolean) {
+        prefs.edit().putBoolean("check_for_updates", enabled).apply()
+        _themeSettings.value = _themeSettings.value.copy(checkForUpdates = enabled)
     }
 
     fun setOnboardingCompleted(completed: Boolean) {

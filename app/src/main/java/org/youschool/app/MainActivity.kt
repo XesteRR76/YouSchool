@@ -1,6 +1,7 @@
 package org.youschool.app
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -25,6 +26,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
@@ -36,6 +38,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import org.youschool.app.core.update.AppRelease
+import org.youschool.app.core.update.AppUpdateChecker
+import org.youschool.app.ui.components.UpdateNotificationBanner
 import org.youschool.app.ui.navigation.Screen
 import org.youschool.app.ui.screens.auth.AuthScreen
 import org.youschool.app.ui.screens.auth.AuthViewModel
@@ -110,6 +115,21 @@ class MainActivity : ComponentActivity() {
 
                     val isFloatingPill = themeSettings.navBarStyle == NavigationBarStyle.FLOATING_PILL && currentRoute != Screen.Auth.route
                     val bottomBarPadding = if (isFloatingPill) (76.dp + themeSettings.navBarBottomOffsetDp.dp) else 0.dp
+
+                    var availableUpdate by remember { mutableStateOf<AppRelease?>(null) }
+                    var isUpdateDismissed by remember { mutableStateOf(false) }
+                    val context = LocalContext.current
+
+                    LaunchedEffect(themeSettings.checkForUpdates) {
+                        if (themeSettings.checkForUpdates && !isUpdateDismissed) {
+                            val release = AppUpdateChecker.checkForUpdate(context)
+                            if (release != null) {
+                                availableUpdate = release
+                            }
+                        } else if (!themeSettings.checkForUpdates) {
+                            availableUpdate = null
+                        }
+                    }
 
                     Box(modifier = Modifier.fillMaxSize()) {
                         Scaffold(
@@ -192,6 +212,35 @@ class MainActivity : ComponentActivity() {
                                 modifier = Modifier.align(Alignment.BottomCenter)
                             )
                         }
+
+                        val bannerBottomPadding = when {
+                            currentRoute == Screen.Auth.route -> 16.dp
+                            isFloatingPill -> bottomBarPadding + 12.dp
+                            themeSettings.navBarStyle == NavigationBarStyle.STANDARD -> 80.dp + 12.dp
+                            else -> 16.dp
+                        }
+
+                        UpdateNotificationBanner(
+                            release = if (!isUpdateDismissed) availableUpdate else null,
+                            onDismiss = {
+                                isUpdateDismissed = true
+                            },
+                            onDownloadClick = { rel ->
+                                val targetUrl = rel.apkDownloadUrl ?: rel.releaseUrl
+                                try {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl))
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    try {
+                                        val fallback = Intent(Intent.ACTION_VIEW, Uri.parse(rel.releaseUrl))
+                                        context.startActivity(fallback)
+                                    } catch (_: Exception) {}
+                                }
+                            },
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(start = 16.dp, end = 16.dp, bottom = bannerBottomPadding)
+                        )
                     }
                 }
             }

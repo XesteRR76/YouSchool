@@ -1,7 +1,10 @@
 package org.youschool.app.ui.screens.profile
 
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
@@ -28,6 +31,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.launch
+import org.youschool.app.core.update.AppRelease
+import org.youschool.app.core.update.AppUpdateChecker
 import org.youschool.app.domain.repository.SchoolRepository
 import org.youschool.app.ui.screens.schedule.GradeBadge
 import org.youschool.app.ui.theme.*
@@ -57,6 +63,57 @@ fun ProfileScreen(
             haptic.tick()
             themeManager.setNotificationsEnabled(false)
         }
+    }
+
+    val coroutineScope = rememberCoroutineScope()
+    var isCheckingUpdates by remember { mutableStateOf(false) }
+    var updateFoundDialog by remember { mutableStateOf<AppRelease?>(null) }
+    val currentAppVersion = remember { AppUpdateChecker.getAppVersion(context) }
+
+    if (updateFoundDialog != null) {
+        val rel = updateFoundDialog!!
+        AlertDialog(
+            onDismissRequest = { updateFoundDialog = null },
+            icon = {
+                Icon(Icons.Rounded.SystemUpdate, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            },
+            title = {
+                Text(text = "Доступно обновление ${rel.versionName}")
+            },
+            text = {
+                Text(
+                    text = if (rel.releaseNotes.isNotBlank()) {
+                        "На GitHub опубликован новый релиз YouSchool!\n\n${rel.releaseNotes.take(300)}"
+                    } else {
+                        "На GitHub доступна новая версия YouSchool. Хотите перейти к скачиванию?"
+                    }
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val targetUrl = rel.apkDownloadUrl ?: rel.releaseUrl
+                        try {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl))
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            try {
+                                val fallback = Intent(Intent.ACTION_VIEW, Uri.parse(rel.releaseUrl))
+                                context.startActivity(fallback)
+                            } catch (_: Exception) {}
+                        }
+                        updateFoundDialog = null
+                    }
+                ) {
+                    Text("Скачать")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { updateFoundDialog = null }) {
+                    Text("Позже")
+                }
+            }
+        )
     }
 
     // State for color picker dialog
@@ -862,6 +919,111 @@ fun ProfileScreen(
                                     } else null,
                                     modifier = Modifier.weight(1f)
                                 )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 6. Обновления приложения
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.large,
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.SystemUpdate, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(text = "Обновления приложения", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Проверять обновления при запуске",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "Автоматически проверять наличие свежих версий YouSchool на GitHub",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Switch(
+                            checked = themeSettings.checkForUpdates,
+                            onCheckedChange = { enable ->
+                                haptic.click()
+                                themeManager.setCheckForUpdates(enable)
+                            }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text(
+                                text = "Текущая версия",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "v$currentAppVersion",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                if (isCheckingUpdates) return@OutlinedButton
+                                haptic.click()
+                                isCheckingUpdates = true
+                                coroutineScope.launch {
+                                    val rel = AppUpdateChecker.checkForUpdate(context)
+                                    isCheckingUpdates = false
+                                    if (rel != null) {
+                                        updateFoundDialog = rel
+                                    } else {
+                                        Toast.makeText(
+                                            context,
+                                            "У вас установлена последняя версия (v$currentAppVersion)",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                }
+                            },
+                            shape = MaterialTheme.shapes.small,
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                        ) {
+                            if (isCheckingUpdates) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Проверка...")
+                            } else {
+                                Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Проверить сейчас")
                             }
                         }
                     }

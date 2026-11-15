@@ -1017,7 +1017,7 @@ private fun StepNotifications(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = "Уведомления",
+            text = "Уведомления и обновления",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center
@@ -1026,7 +1026,7 @@ private fun StepNotifications(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "Получайте мгновенные пуш-уведомления, как только учитель выставит новую оценку в электронный журнал",
+            text = "Настройте получение пуш-уведомлений о новых оценках и проверку обновлений YouSchool на GitHub",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.outline,
             textAlign = TextAlign.Center
@@ -1180,6 +1180,56 @@ private fun StepNotifications(
                             haptic.click()
                             themeManager.setNotificationsEnabled(false)
                         }
+                    }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // Check for updates toggle switch card
+        Surface(
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Rounded.SystemUpdate,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = "Проверка обновлений",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Уведомлять о выходе новых версий YouSchool на GitHub",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
+                }
+
+                Switch(
+                    checked = settings.checkForUpdates,
+                    onCheckedChange = { enable ->
+                        haptic.click()
+                        themeManager.setCheckForUpdates(enable)
                     }
                 )
             }
