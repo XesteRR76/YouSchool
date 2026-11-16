@@ -14,7 +14,7 @@ import org.youschool.app.ui.screens.messages.MessagesViewModel
 import java.io.File
 import java.io.IOException
 
-private abstract class UnusedRepository : SchoolRepository {
+internal abstract class UnusedRepository : SchoolRepository {
     override suspend fun getMessageThreads(before: Long?): Result<List<MessageThread>> = error("Unexpected repository call")
     override suspend fun getMessageThread(id: Long): Result<MessageThread> = error("Unexpected repository call")
     override suspend fun getMessages(id: Long, before: Long?): Result<List<SchoolMessage>> = error("Unexpected repository call")
