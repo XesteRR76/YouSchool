@@ -4,6 +4,7 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
@@ -24,8 +25,7 @@ fun ExpandableHomeworkText(
     modifier: Modifier = Modifier,
     maxCollapsedLines: Int = 3,
     isExpanded: Boolean? = null,
-    onToggleExpand: (() -> Unit)? = null,
-    canCopy: Boolean = true
+    onToggleExpand: (() -> Unit)? = null
 ) {
     var localIsExpanded by remember { mutableStateOf(false) }
     val effectiveExpanded = isExpanded ?: localIsExpanded
@@ -36,9 +36,8 @@ fun ExpandableHomeworkText(
     }
 
     Column(modifier = modifier.animateContentSize()) {
-        Row(verticalAlignment = Alignment.Top) {
+        SelectionContainer {
             Text(
-                modifier = Modifier.weight(1f),
                 text = text,
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (isDone) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface,
@@ -50,9 +49,6 @@ fun ExpandableHomeworkText(
                     }
                 }
             )
-            if (canCopy) {
-                CopyHomeworkButton(text)
-            }
         }
 
         if (hasOverflow || isLongText || effectiveExpanded) {

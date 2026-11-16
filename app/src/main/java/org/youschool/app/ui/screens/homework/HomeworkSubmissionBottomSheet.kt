@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Assignment
@@ -36,7 +37,6 @@ import kotlinx.coroutines.withContext
 import org.youschool.app.domain.model.HomeworkResultFile
 import org.youschool.app.domain.model.Lesson
 import org.youschool.app.domain.repository.SchoolRepository
-import org.youschool.app.ui.components.CopyHomeworkButton
 import org.youschool.app.ui.components.FileOpener
 import org.youschool.app.ui.util.rememberHaptic
 import java.io.File
@@ -180,10 +180,7 @@ fun HomeworkSubmissionBottomSheet(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 Icons.AutoMirrored.Rounded.Assignment,
                                 contentDescription = null,
@@ -196,14 +193,14 @@ fun HomeworkSubmissionBottomSheet(
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.outline
                             )
-                            Spacer(modifier = Modifier.weight(1f))
-                            CopyHomeworkButton(lesson.homeworkText)
                         }
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = lesson.homeworkText,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                        SelectionContainer {
+                            Text(
+                                text = lesson.homeworkText,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
