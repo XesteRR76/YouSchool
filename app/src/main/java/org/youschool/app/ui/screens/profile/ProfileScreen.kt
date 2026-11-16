@@ -9,6 +9,10 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.spring
+import kotlinx.coroutines.Job
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -526,13 +530,14 @@ fun ProfileScreen(
                     var activeList by remember { mutableStateOf(routes) }
                     var draggingRoute by remember { mutableStateOf<String?>(null) }
                     var dragAccumulatedY by remember { mutableFloatStateOf(0f) }
+                    var snapAnimationJob by remember { mutableStateOf<Job?>(null) }
                     val density = androidx.compose.ui.platform.LocalDensity.current
                     var itemStepPx by remember { mutableFloatStateOf(0f) }
                     val fallbackStepPx = with(density) { 66.dp.toPx() }
 
-                    // Sync activeList with external updates when not dragging
+                    // Sync activeList with external updates when not dragging or animating
                     LaunchedEffect(routes) {
-                        if (draggingRoute == null) {
+                        if (draggingRoute == null && snapAnimationJob?.isActive != true) {
                             activeList = routes
                         }
                     }
@@ -578,6 +583,9 @@ fun ProfileScreen(
                                             enabled = screen != Screen.Profile && routes.size > 2,
                                             onCheckedChange = { checked ->
                                                 if (!checked) {
+                                                    snapAnimationJob?.cancel()
+                                                    draggingRoute = null
+                                                    dragAccumulatedY = 0f
                                                     val updated = routes - screen.route
                                                     activeList = updated
                                                     themeManager.setBottomBarRoutes(updated)
@@ -606,15 +614,37 @@ fun ProfileScreen(
                                                     try {
                                                         detectDragGestures(
                                                             onDragStart = {
+                                                                snapAnimationJob?.cancel()
                                                                 draggingRoute = route
                                                                 dragAccumulatedY = 0f
                                                                 haptic.tick()
                                                             },
                                                             onDragEnd = {
-                                                                themeManager.setBottomBarRoutes(activeList)
-                                                                haptic.click()
+                                                                snapAnimationJob?.cancel()
+                                                                snapAnimationJob = coroutineScope.launch {
+                                                                    try {
+                                                                        animate(
+                                                                            initialValue = dragAccumulatedY,
+                                                                            targetValue = 0f,
+                                                                            animationSpec = spring(
+                                                                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                                                stiffness = Spring.StiffnessMediumLow
+                                                                            )
+                                                                        ) { value, _ ->
+                                                                            dragAccumulatedY = value
+                                                                        }
+                                                                    } finally {
+                                                                        draggingRoute = null
+                                                                        dragAccumulatedY = 0f
+                                                                        themeManager.setBottomBarRoutes(activeList)
+                                                                        haptic.click()
+                                                                    }
+                                                                }
                                                             },
                                                             onDragCancel = {
+                                                                snapAnimationJob?.cancel()
+                                                                draggingRoute = null
+                                                                dragAccumulatedY = 0f
                                                                 themeManager.setBottomBarRoutes(activeList)
                                                             },
                                                             onDrag = { change, dragAmount ->
@@ -647,9 +677,11 @@ fun ProfileScreen(
                                                             }
                                                         )
                                                     } finally {
-                                                        // Always cleanly reset drag state so the card never stays frozen or overlapping
-                                                        draggingRoute = null
-                                                        dragAccumulatedY = 0f
+                                                        // If not animating, ensure drag state is cleanly reset
+                                                        if (snapAnimationJob?.isActive != true) {
+                                                            draggingRoute = null
+                                                            dragAccumulatedY = 0f
+                                                        }
                                                     }
                                                 },
                                             contentAlignment = Alignment.Center
