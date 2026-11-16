@@ -4,6 +4,7 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
@@ -35,18 +36,20 @@ fun ExpandableHomeworkText(
     }
 
     Column(modifier = modifier.animateContentSize()) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (isDone) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface,
-            maxLines = if (effectiveExpanded) Int.MAX_VALUE else maxCollapsedLines,
-            overflow = TextOverflow.Ellipsis,
-            onTextLayout = { textLayoutResult ->
-                if (!effectiveExpanded) {
-                    hasOverflow = textLayoutResult.hasVisualOverflow || isLongText
+        SelectionContainer {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (isDone) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface,
+                maxLines = if (effectiveExpanded) Int.MAX_VALUE else maxCollapsedLines,
+                overflow = TextOverflow.Ellipsis,
+                onTextLayout = { textLayoutResult ->
+                    if (!effectiveExpanded) {
+                        hasOverflow = textLayoutResult.hasVisualOverflow || isLongText
+                    }
                 }
-            }
-        )
+            )
+        }
 
         if (hasOverflow || isLongText || effectiveExpanded) {
             val interactionSource = remember { MutableInteractionSource() }
