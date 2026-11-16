@@ -717,6 +717,7 @@ fun LessonCard(
                     Column(modifier = Modifier.weight(1f)) {
                         ExpandableHomeworkText(
                             text = lesson.homeworkText.ifBlank { "Прикреплены материалы к уроку" },
+                            canCopy = lesson.homeworkText.isNotBlank(),
                             isDone = lesson.isHomeworkDone,
                             isExpanded = isHomeworkExpanded,
                             onToggleExpand = onToggleHomeworkExpand

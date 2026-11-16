@@ -267,6 +267,7 @@ fun HomeworkScreen(
 
                                         ExpandableHomeworkText(
                                             text = item.homeworkText.ifBlank { "Прикреплены материалы" },
+                                            canCopy = item.homeworkText.isNotBlank(),
                                             isDone = item.isHomeworkDone,
                                             isExpanded = expandedHomeworkIds.contains(item.id),
                                             onToggleExpand = {

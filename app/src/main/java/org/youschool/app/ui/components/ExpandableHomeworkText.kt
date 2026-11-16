@@ -24,7 +24,8 @@ fun ExpandableHomeworkText(
     modifier: Modifier = Modifier,
     maxCollapsedLines: Int = 3,
     isExpanded: Boolean? = null,
-    onToggleExpand: (() -> Unit)? = null
+    onToggleExpand: (() -> Unit)? = null,
+    canCopy: Boolean = true
 ) {
     var localIsExpanded by remember { mutableStateOf(false) }
     val effectiveExpanded = isExpanded ?: localIsExpanded
@@ -35,18 +36,24 @@ fun ExpandableHomeworkText(
     }
 
     Column(modifier = modifier.animateContentSize()) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (isDone) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface,
-            maxLines = if (effectiveExpanded) Int.MAX_VALUE else maxCollapsedLines,
-            overflow = TextOverflow.Ellipsis,
-            onTextLayout = { textLayoutResult ->
-                if (!effectiveExpanded) {
-                    hasOverflow = textLayoutResult.hasVisualOverflow || isLongText
+        Row(verticalAlignment = Alignment.Top) {
+            Text(
+                modifier = Modifier.weight(1f),
+                text = text,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (isDone) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface,
+                maxLines = if (effectiveExpanded) Int.MAX_VALUE else maxCollapsedLines,
+                overflow = TextOverflow.Ellipsis,
+                onTextLayout = { textLayoutResult ->
+                    if (!effectiveExpanded) {
+                        hasOverflow = textLayoutResult.hasVisualOverflow || isLongText
+                    }
                 }
+            )
+            if (canCopy) {
+                CopyHomeworkButton(text)
             }
-        )
+        }
 
         if (hasOverflow || isLongText || effectiveExpanded) {
             val interactionSource = remember { MutableInteractionSource() }

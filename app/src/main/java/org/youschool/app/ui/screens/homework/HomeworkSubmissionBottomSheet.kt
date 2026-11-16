@@ -36,6 +36,7 @@ import kotlinx.coroutines.withContext
 import org.youschool.app.domain.model.HomeworkResultFile
 import org.youschool.app.domain.model.Lesson
 import org.youschool.app.domain.repository.SchoolRepository
+import org.youschool.app.ui.components.CopyHomeworkButton
 import org.youschool.app.ui.components.FileOpener
 import org.youschool.app.ui.util.rememberHaptic
 import java.io.File
@@ -179,7 +180,10 @@ fun HomeworkSubmissionBottomSheet(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Icon(
                                 Icons.AutoMirrored.Rounded.Assignment,
                                 contentDescription = null,
@@ -192,6 +196,8 @@ fun HomeworkSubmissionBottomSheet(
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.outline
                             )
+                            Spacer(modifier = Modifier.weight(1f))
+                            CopyHomeworkButton(lesson.homeworkText)
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
