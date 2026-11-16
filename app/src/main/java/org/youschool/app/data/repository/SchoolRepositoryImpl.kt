@@ -241,13 +241,6 @@ class SchoolRepositoryImpl(
                             }
                         }
 
-                        val timeRange = org.youschool.app.ui.util.LessonTimeFormatter.formatLessonTimeRange(
-                            startRaw = dto.start ?: dto.startTime ?: dto.startDt,
-                            endRaw = dto.end ?: dto.endTime ?: dto.endDt,
-                            timeRaw = dto.time,
-                            bellRaw = dto.bell
-                        )
-
                         LessonEntity(
                             id = dto.id,
                             dateMillis = dto.date ?: startOfDay,
@@ -261,8 +254,7 @@ class SchoolRepositoryImpl(
                             homeworkFilesJson = json.encodeToString(filesList),
                             gradeValue = null,
                             gradeWeight = null,
-                            homeworkPartId = homeworkPartId,
-                            timeRange = timeRange
+                            homeworkPartId = homeworkPartId
                         )
                     }
 
@@ -671,8 +663,7 @@ class SchoolRepositoryImpl(
             gradeValue = gradeValue,
             gradeWeight = gradeWeight,
             grades = lessonGrades,
-            homeworkPartId = homeworkPartId,
-            timeRange = timeRange
+            homeworkPartId = homeworkPartId
         )
     }
 
