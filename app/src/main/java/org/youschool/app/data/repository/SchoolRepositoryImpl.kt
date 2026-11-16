@@ -114,8 +114,16 @@ class SchoolRepositoryImpl(
     override fun getNewGrades(): Flow<List<Grade>> {
         val gradesFlow = database.gradeDao().getAllGrades()
         val readFlow = database.readGradeDao().getAllReadGrades()
+        val prefs = context.getSharedPreferences("youschool_prefs", Context.MODE_PRIVATE)
 
         return combine(gradesFlow, readFlow) { grades, readEntities ->
+            val userId = authManager.getUserId()
+            val initializedKey = "initialized_grades_v2_$userId"
+            if (!prefs.getBoolean(initializedKey, false)) {
+                // Initial sync has not yet completed; ignore past grades
+                return@combine emptyList()
+            }
+
             val readKeySet = readEntities.map { it.markKey }.toSet()
             val sevenDaysAgoMs = System.currentTimeMillis() - 7 * 86400000L
 
@@ -233,6 +241,13 @@ class SchoolRepositoryImpl(
                             }
                         }
 
+                        val timeRange = org.youschool.app.ui.util.LessonTimeFormatter.formatLessonTimeRange(
+                            startRaw = dto.start ?: dto.startTime ?: dto.startDt,
+                            endRaw = dto.end ?: dto.endTime ?: dto.endDt,
+                            timeRaw = dto.time,
+                            bellRaw = dto.bell
+                        )
+
                         LessonEntity(
                             id = dto.id,
                             dateMillis = dto.date ?: startOfDay,
@@ -246,7 +261,8 @@ class SchoolRepositoryImpl(
                             homeworkFilesJson = json.encodeToString(filesList),
                             gradeValue = null,
                             gradeWeight = null,
-                            homeworkPartId = homeworkPartId
+                            homeworkPartId = homeworkPartId,
+                            timeRange = timeRange
                         )
                     }
 
@@ -296,15 +312,13 @@ class SchoolRepositoryImpl(
                     }
                     val prefs = context.getSharedPreferences("youschool_prefs", Context.MODE_PRIVATE)
                     if (authManager.getUserId() != userId) return@withContext Result.failure(Exception("Аккаунт изменился"))
-                    val initializedKey = "initialized_grades_$userId"
-                    val isFirstGradesSync = !prefs.getBoolean(initializedKey, false)
+                    val initializedKey = "initialized_grades_v2_$userId"
                     val notificationPrefs = context.getSharedPreferences("youschool_notification_state", Context.MODE_PRIVATE)
                     val seenKey = "grades_${userId}_$currentPeriodId"
                     val keys = entities.associateBy { "${it.unitId}_${it.lessonId}_${it.markDate}_${it.markVal}_${it.workType}" }
                     val seen = notificationPrefs.getStringSet(seenKey, null)?.toSet()
+                    val isFirstGradesSync = !prefs.getBoolean(initializedKey, false) || seen == null
                     val newKeys = NotificationRules.newKeys(keys.keys, seen)
-
-                    database.gradeDao().replaceAllGrades(entities)
 
                     if (isFirstGradesSync) {
                         // On first launch / initial sync, mark all existing past grades as already read
@@ -315,7 +329,21 @@ class SchoolRepositoryImpl(
                         }
                         database.readGradeDao().markAsRead(readEntities)
                         prefs.edit().putBoolean(initializedKey, true).apply()
+                    } else if (newKeys.isNotEmpty()) {
+                        // In subsequent syncs, guarantee all previous (non-new) grades are marked as read
+                        val nonNewEntities = entities.filter { entity ->
+                            val key = "${entity.unitId}_${entity.lessonId}_${entity.markDate}_${entity.markVal}_${entity.workType}"
+                            !newKeys.contains(key)
+                        }.map { entity ->
+                            val key = "${entity.lessonId ?: 0}_${entity.markDate}_${entity.markVal}"
+                            ReadGradeEntity(key)
+                        }
+                        if (nonNewEntities.isNotEmpty()) {
+                            database.readGradeDao().markAsRead(nonNewEntities)
+                        }
                     }
+
+                    database.gradeDao().replaceAllGrades(entities)
 
                     notificationPrefs.edit().putStringSet(seenKey, (seen.orEmpty() + keys.keys).toSet()).apply()
                     val settings = (context.applicationContext as org.youschool.app.YouSchoolApp).themeManager.themeSettings.value
@@ -554,12 +582,14 @@ class SchoolRepositoryImpl(
     }
 
     override fun logout() {
+        val userId = authManager.getUserId()
         authManager.clear()
         NotificationHelper.cancelAll(context)
         org.youschool.app.core.notification.GradesNotificationScheduler.cancel(context)
         context.getSharedPreferences("youschool_prefs", Context.MODE_PRIVATE)
             .edit()
-            .remove("has_initialized_grades_read_state")
+            .remove("initialized_grades_$userId")
+            .remove("initialized_grades_v2_$userId")
             .apply()
     }
 
@@ -648,7 +678,8 @@ class SchoolRepositoryImpl(
             gradeValue = gradeValue,
             gradeWeight = gradeWeight,
             grades = lessonGrades,
-            homeworkPartId = homeworkPartId
+            homeworkPartId = homeworkPartId,
+            timeRange = timeRange
         )
     }
 

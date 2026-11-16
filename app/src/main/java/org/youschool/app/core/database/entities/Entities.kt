@@ -18,7 +18,8 @@ data class LessonEntity(
     val homeworkFilesJson: String,
     val gradeValue: String?,
     val gradeWeight: Int?,
-    val homeworkPartId: Long? = null
+    val homeworkPartId: Long? = null,
+    val timeRange: String? = null
 )
 
 @Entity(tableName = "grades")

@@ -14,7 +14,8 @@ data class Lesson(
     val gradeValue: String? = null,
     val gradeWeight: Int? = null,
     val grades: List<Grade> = emptyList(),
-    val homeworkPartId: Long? = null
+    val homeworkPartId: Long? = null,
+    val timeRange: String? = null
 )
 
 data class HomeworkAttachment(

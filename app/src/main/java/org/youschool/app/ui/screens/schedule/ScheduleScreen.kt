@@ -610,49 +610,63 @@ fun LessonCard(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                // Grades badges cluster on top right
-                if (lesson.grades.isNotEmpty()) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        lesson.grades.forEach { grade ->
-                            GradeBadge(
-                                mark = grade.value,
-                                weight = grade.weight,
-                                showWeightSuperscript = true,
-                                onClick = { selectedGradeForDetails = grade }
-                            )
-                        }
-                    }
-                } else if (!lesson.gradeValue.isNullOrBlank()) {
-                    val fallbackWeight = lesson.gradeWeight?.toDouble()
-                    val fallbackGrade = remember(lesson, fallbackWeight) {
-                        val numVal = lesson.gradeValue.toDoubleOrNull() ?: 0.0
-                        val dateFormatted = try {
-                            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                            sdf.format(Date(lesson.dateMillis))
-                        } catch (e: Exception) {
-                            ""
-                        }
-                        Grade(
-                            id = lesson.id.toString(),
-                            lessonId = lesson.id,
-                            subjectName = lesson.subjectName,
-                            value = lesson.gradeValue,
-                            numericValue = numVal,
-                            weight = fallbackWeight ?: 1.0,
-                            date = dateFormatted,
-                            typeName = "Оценка за урок",
-                            teacherName = lesson.teacherName
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (!lesson.timeRange.isNullOrBlank()) {
+                        Text(
+                            text = lesson.timeRange,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.outline
                         )
                     }
-                    GradeBadge(
-                        mark = lesson.gradeValue,
-                        weight = fallbackWeight,
-                        showWeightSuperscript = true,
-                        onClick = { selectedGradeForDetails = fallbackGrade }
-                    )
+
+                    // Grades badges cluster on top right
+                    if (lesson.grades.isNotEmpty()) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            lesson.grades.forEach { grade ->
+                                GradeBadge(
+                                    mark = grade.value,
+                                    weight = grade.weight,
+                                    showWeightSuperscript = true,
+                                    onClick = { selectedGradeForDetails = grade }
+                                )
+                            }
+                        }
+                    } else if (!lesson.gradeValue.isNullOrBlank()) {
+                        val fallbackWeight = lesson.gradeWeight?.toDouble()
+                        val fallbackGrade = remember(lesson, fallbackWeight) {
+                            val numVal = lesson.gradeValue.toDoubleOrNull() ?: 0.0
+                            val dateFormatted = try {
+                                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                                sdf.format(Date(lesson.dateMillis))
+                            } catch (e: Exception) {
+                                ""
+                            }
+                            Grade(
+                                id = lesson.id.toString(),
+                                lessonId = lesson.id,
+                                subjectName = lesson.subjectName,
+                                value = lesson.gradeValue,
+                                numericValue = numVal,
+                                weight = fallbackWeight ?: 1.0,
+                                date = dateFormatted,
+                                typeName = "Оценка за урок",
+                                teacherName = lesson.teacherName
+                            )
+                        }
+                        GradeBadge(
+                            mark = lesson.gradeValue,
+                            weight = fallbackWeight,
+                            showWeightSuperscript = true,
+                            onClick = { selectedGradeForDetails = fallbackGrade }
+                        )
+                    }
                 }
             }
 

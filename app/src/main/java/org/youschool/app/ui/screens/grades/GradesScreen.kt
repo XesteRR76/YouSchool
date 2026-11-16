@@ -86,9 +86,6 @@ class GradesViewModel(private val repository: SchoolRepository) : ViewModel() {
         viewModelScope.launch {
             _isRefreshing.value = true
             repository.syncGrades()
-            if (newGrades.value.isEmpty()) {
-                repository.unmarkAllGradesAsRead()
-            }
             _isRefreshing.value = false
         }
     }

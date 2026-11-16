@@ -239,4 +239,18 @@ class FeatureRulesTest {
         val syncingState = SyncStatus(isOnline = true, pendingCount = 1, isSyncing = true)
         assertTrue(syncingState.isSyncing)
     }
+
+    @Test fun initialGradeSyncIgnoresAllPastGrades() {
+        val pastGrades = (1..20).map { "unit_${it}_lesson_${it}_date_mark_5_type" }.toSet()
+        // First sync: seen is null -> 0 new keys returned
+        val initialNewKeys = NotificationRules.newKeys(pastGrades, null)
+        assertTrue("At first sync, past grades must all be ignored", initialNewKeys.isEmpty())
+
+        // Subsequent sync: existing grades are in seen, plus 1 new grade arrives
+        val seen = pastGrades
+        val updatedGrades = pastGrades + "unit_1_lesson_99_new_date_mark_5_test"
+        val subsequentNewKeys = NotificationRules.newKeys(updatedGrades, seen)
+        assertEquals(1, subsequentNewKeys.size)
+        assertTrue(subsequentNewKeys.contains("unit_1_lesson_99_new_date_mark_5_test"))
+    }
 }

@@ -16,7 +16,7 @@ import org.youschool.app.core.database.entities.*
         PendingHomeworkSyncEntity::class,
         PendingHomeworkUploadEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class YouSchoolDatabase : RoomDatabase() {
