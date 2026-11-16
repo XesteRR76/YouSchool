@@ -411,29 +411,29 @@ fun NewGradesSection(
     SwipeToDismissBox(
         state = blockDismissState,
         backgroundContent = {
-            if (blockDismissState.dismissDirection != null) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(MaterialTheme.shapes.extraLarge)
-                        .background(MaterialTheme.colorScheme.primaryContainer)
-                        .padding(horizontal = 24.dp),
-                    contentAlignment = if (blockDismissState.dismissDirection == SwipeToDismissBoxValue.StartToEnd)
-                        Alignment.CenterStart else Alignment.CenterEnd
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Rounded.DoneAll,
-                            contentDescription = "Прочитать все",
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            "Пометить все прочитанными",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
+            val dismissDirection = blockDismissState.dismissDirection
+            val isStart = dismissDirection == SwipeToDismissBoxValue.StartToEnd
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(MaterialTheme.shapes.extraLarge)
+                    .background(MaterialTheme.colorScheme.primaryContainer)
+                    .padding(horizontal = 24.dp),
+                contentAlignment = if (isStart)
+                    Alignment.CenterStart else Alignment.CenterEnd
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Rounded.DoneAll,
+                        contentDescription = "Прочитать все",
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "Пометить все прочитанными",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
                 }
             }
         }
@@ -594,29 +594,28 @@ fun NewGradeDismissibleItem(
     SwipeToDismissBox(
         state = dismissState,
         backgroundContent = {
-            if (dismissState.dismissDirection != null) {
-                val isStart = dismissState.dismissDirection == SwipeToDismissBoxValue.StartToEnd
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(MaterialTheme.shapes.medium)
-                        .background(MaterialTheme.colorScheme.secondaryContainer)
-                        .padding(horizontal = 16.dp),
-                    contentAlignment = if (isStart) Alignment.CenterStart else Alignment.CenterEnd
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Rounded.Done,
-                            contentDescription = "Прочитано",
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            "Прочитано",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                    }
+            val dismissDirection = dismissState.dismissDirection
+            val isStart = dismissDirection == SwipeToDismissBoxValue.StartToEnd
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(MaterialTheme.shapes.medium)
+                    .background(MaterialTheme.colorScheme.secondaryContainer)
+                    .padding(horizontal = 16.dp),
+                contentAlignment = if (isStart) Alignment.CenterStart else Alignment.CenterEnd
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Rounded.Done,
+                        contentDescription = "Прочитано",
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        "Прочитано",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
                 }
             }
         }
@@ -1000,42 +999,23 @@ fun SubjectGradeCard(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "Вес: $simWStr • Смоделировано",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                    Text(
-                                        text = "+ Добавлена в калькуляторе",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                                GradeBadge(mark = sim.displayValue, weight = sim.weight)
+                                Text(
+                                    text = "Прогноз: ${sim.displayValue} (${simWStr})",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = if (sim.isAdded) "Добавлено" else "Скрыто",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
                             }
                         }
                     }
 
-                    if (grades.isEmpty() && simulatedGrades.isEmpty()) {
-                        Text(
-                            text = "Детали оценок отсутствуют",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.outline
-                        )
-                    } else {
-                        grades.forEach { g ->
-                            val isExcluded = simulation?.excludedGradeKeys?.contains(g.id) == true
-                            val gradeWeightStr = if (g.weight % 1.0 == 0.0) {
-                                g.weight.toInt().toString()
-                            } else {
-                                String.format(Locale.US, "%.1f", g.weight)
-                            }
-                            val lessonDay = formatGradeDisplayDate(g.lessonDate)
-                            val primaryDateStr = if (lessonDay.isNotBlank()) "Урок: $lessonDay" else formatGradeDisplayDate(g.date)
-                            val postingInfo = formatMarkPostingInfo(g.lessonDate, g.date)
-
+                    // Real grades list
+                    if (activeRealGrades.isNotEmpty()) {
+                        activeRealGrades.forEach { grade ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -1043,56 +1023,21 @@ fun SubjectGradeCard(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "Вес: $gradeWeightStr • $primaryDateStr",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = if (isExcluded) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface,
-                                        textDecoration = if (isExcluded) TextDecoration.LineThrough else TextDecoration.None
-                                    )
-                                    if (isExcluded) {
-                                        Text(
-                                            text = "Исключена в калькуляторе",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.error
-                                        )
-                                    } else {
-                                        val subtitleParts = listOfNotNull(
-                                            g.typeName.takeIf { it.isNotBlank() && it.length <= 30 && !it.contains(".") },
-                                            postingInfo
-                                        ).joinToString(" • ")
-
-                                        if (subtitleParts.isNotBlank()) {
-                                            Text(
-                                                text = subtitleParts,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.outline
-                                            )
-                                        }
-                                    }
-                                }
-                                GradeBadge(
-                                    mark = g.value,
-                                    weight = g.weight,
-                                    modifier = Modifier.padding(start = 8.dp)
+                                Text(
+                                    text = grade.value.toString(),
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Text(
+                                    text = "Вес: ${grade.weight}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.outline
                                 )
                             }
                         }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-                    FilledTonalButton(
-                        onClick = onOpenCalculator,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.medium
-                    ) {
-                        Icon(Icons.Rounded.Calculate, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(if (hasSimulation) "Изменить прогноз в калькуляторе" else "Калькулятор балла")
                     }
                 }
             }
         }
     }
 }
+
