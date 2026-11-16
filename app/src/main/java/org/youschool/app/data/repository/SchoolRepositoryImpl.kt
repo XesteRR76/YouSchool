@@ -532,6 +532,13 @@ class SchoolRepositoryImpl(
         }
     }
 
+    override suspend fun loginDemo(): Result<UserProfile> {
+        authManager.saveCredentials("demo", "demo")
+        authManager.saveUserInfo(1001L, 2002L, "Иван Иванов", "Гимназия №1")
+        val profile = UserProfile(1001L, 2002L, "Иван Иванов", "Гимназия №1", "ROLE_STUDENT")
+        return Result.success(profile)
+    }
+
     override fun isUserLoggedIn(): Boolean = authManager.hasCredentials()
 
     override fun getUserProfile(): UserProfile? {

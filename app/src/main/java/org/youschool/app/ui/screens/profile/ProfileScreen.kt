@@ -26,6 +26,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.zIndex
@@ -522,118 +523,143 @@ fun ProfileScreen(
                     Spacer(modifier = Modifier.height(6.dp))
 
                     val routes = themeSettings.bottomBarRoutes
-                    var activeList by remember(routes) { mutableStateOf(routes) }
-                    var draggedIndex by remember { mutableStateOf<Int?>(null) }
+                    var activeList by remember { mutableStateOf(routes) }
+                    var draggingRoute by remember { mutableStateOf<String?>(null) }
                     var dragAccumulatedY by remember { mutableFloatStateOf(0f) }
-                    val itemStepPx = with(androidx.compose.ui.platform.LocalDensity.current) { 62.dp.toPx() }
+                    val density = androidx.compose.ui.platform.LocalDensity.current
+                    var itemStepPx by remember { mutableFloatStateOf(0f) }
+                    val fallbackStepPx = with(density) { 66.dp.toPx() }
+
+                    // Sync activeList with external updates when not dragging
+                    LaunchedEffect(routes) {
+                        if (draggingRoute == null) {
+                            activeList = routes
+                        }
+                    }
 
                     // Draggable active routes
-                    activeList.forEachIndexed { index, route ->
-                        val screen = Screen.allMainScreens.find { it.route == route }
-                        if (screen != null) {
-                            val isBeingDragged = draggedIndex == index
-                            val cardOffset = if (isBeingDragged) dragAccumulatedY.roundToInt() else 0
+                    activeList.forEach { route ->
+                        key(route) {
+                            val screen = Screen.allMainScreens.find { it.route == route }
+                            if (screen != null) {
+                                val isBeingDragged = draggingRoute == route
+                                val cardOffset = if (isBeingDragged) dragAccumulatedY.roundToInt() else 0
 
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 3.dp)
-                                    .zIndex(if (isBeingDragged) 2f else 1f)
-                                    .offset { IntOffset(0, cardOffset) }
-                                    .scale(if (isBeingDragged) 1.02f else 1f)
-                                    .shadow(if (isBeingDragged) 8.dp else 1.dp, shape = RoundedCornerShape(12.dp)),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = if (isBeingDragged)
-                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                                    else
-                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
-                                )
-                            ) {
-                                Row(
+                                Card(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Checkbox(
-                                        modifier = Modifier.semantics { contentDescription = screen.title },
-                                        checked = true,
-                                        enabled = screen != Screen.Profile && routes.size > 2,
-                                        onCheckedChange = { checked ->
-                                            if (!checked) {
-                                                val updated = routes - screen.route
-                                                themeManager.setBottomBarRoutes(updated)
+                                        .padding(vertical = 3.dp)
+                                        .onGloballyPositioned { coordinates ->
+                                            if (itemStepPx == 0f) {
+                                                itemStepPx = coordinates.size.height.toFloat() + with(density) { 6.dp.toPx() }
                                             }
                                         }
+                                        .zIndex(if (isBeingDragged) 10f else 1f)
+                                        .offset { IntOffset(0, cardOffset) }
+                                        .scale(if (isBeingDragged) 1.03f else 1f)
+                                        .shadow(if (isBeingDragged) 8.dp else 1.dp, shape = RoundedCornerShape(12.dp)),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (isBeingDragged)
+                                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                                        else
+                                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
                                     )
-                                    screen.icon?.let { icon ->
-                                        Icon(
-                                            imageVector = icon,
-                                            contentDescription = null,
-                                            tint = if (isBeingDragged) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(22.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(10.dp))
-                                    }
-                                    Text(
-                                        text = screen.title,
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.SemiBold,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    Box(
+                                ) {
+                                    Row(
                                         modifier = Modifier
-                                            .size(40.dp)
-                                            .pointerInput(screen.route) {
-                                                detectDragGestures(
-                                                    onDragStart = {
-                                                        draggedIndex = index
-                                                        dragAccumulatedY = 0f
-                                                        haptic.tick()
-                                                    },
-                                                    onDragEnd = {
-                                                        themeManager.setBottomBarRoutes(activeList)
-                                                        draggedIndex = null
-                                                        dragAccumulatedY = 0f
-                                                        haptic.click()
-                                                    },
-                                                    onDragCancel = {
-                                                        themeManager.setBottomBarRoutes(activeList)
-                                                        draggedIndex = null
-                                                        dragAccumulatedY = 0f
-                                                    },
-                                                    onDrag = { change, dragAmount ->
-                                                        change.consume()
-                                                        dragAccumulatedY += dragAmount.y
-                                                        val curIdx = draggedIndex ?: return@detectDragGestures
-                                                        if (dragAccumulatedY > itemStepPx * 0.5f && curIdx < activeList.lastIndex) {
-                                                            val updated = activeList.toMutableList()
-                                                            java.util.Collections.swap(updated, curIdx, curIdx + 1)
-                                                            activeList = updated
-                                                            draggedIndex = curIdx + 1
-                                                            dragAccumulatedY -= itemStepPx
-                                                            haptic.tick()
-                                                            themeManager.setBottomBarRoutes(updated)
-                                                        } else if (dragAccumulatedY < -itemStepPx * 0.5f && curIdx > 0) {
-                                                            val updated = activeList.toMutableList()
-                                                            java.util.Collections.swap(updated, curIdx, curIdx - 1)
-                                                            activeList = updated
-                                                            draggedIndex = curIdx - 1
-                                                            dragAccumulatedY += itemStepPx
-                                                            haptic.tick()
-                                                            themeManager.setBottomBarRoutes(updated)
-                                                        }
-                                                    }
-                                                )
-                                            },
-                                        contentAlignment = Alignment.Center
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.DragIndicator,
-                                            contentDescription = "Перетащить: ${screen.title}",
-                                            tint = if (isBeingDragged) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                                        Checkbox(
+                                            modifier = Modifier.semantics { contentDescription = screen.title },
+                                            checked = true,
+                                            enabled = screen != Screen.Profile && routes.size > 2,
+                                            onCheckedChange = { checked ->
+                                                if (!checked) {
+                                                    val updated = routes - screen.route
+                                                    activeList = updated
+                                                    themeManager.setBottomBarRoutes(updated)
+                                                }
+                                            }
                                         )
+                                        screen.icon?.let { icon ->
+                                            Icon(
+                                                imageVector = icon,
+                                                contentDescription = null,
+                                                tint = if (isBeingDragged) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(22.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                        }
+                                        Text(
+                                            text = screen.title,
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.SemiBold,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .size(48.dp)
+                                                .pointerInput(route) {
+                                                    try {
+                                                        detectDragGestures(
+                                                            onDragStart = {
+                                                                draggingRoute = route
+                                                                dragAccumulatedY = 0f
+                                                                haptic.tick()
+                                                            },
+                                                            onDragEnd = {
+                                                                themeManager.setBottomBarRoutes(activeList)
+                                                                haptic.click()
+                                                            },
+                                                            onDragCancel = {
+                                                                themeManager.setBottomBarRoutes(activeList)
+                                                            },
+                                                            onDrag = { change, dragAmount ->
+                                                                change.consume()
+                                                                val step = if (itemStepPx > 0f) itemStepPx else fallbackStepPx
+                                                                var curIdx = activeList.indexOf(route)
+                                                                if (curIdx != -1) {
+                                                                    val maxDown = (activeList.lastIndex - curIdx) * step + step * 0.7f
+                                                                    val maxUp = -curIdx * step - step * 0.7f
+                                                                    dragAccumulatedY = (dragAccumulatedY + dragAmount.y).coerceIn(maxUp, maxDown)
+
+                                                                    // Continuous multi-slot reordering
+                                                                    while (curIdx != -1 && dragAccumulatedY > step * 0.5f && curIdx < activeList.lastIndex) {
+                                                                        val updated = activeList.toMutableList()
+                                                                        java.util.Collections.swap(updated, curIdx, curIdx + 1)
+                                                                        activeList = updated
+                                                                        dragAccumulatedY -= step
+                                                                        curIdx++
+                                                                        haptic.tick()
+                                                                    }
+                                                                    while (curIdx != -1 && dragAccumulatedY < -step * 0.5f && curIdx > 0) {
+                                                                        val updated = activeList.toMutableList()
+                                                                        java.util.Collections.swap(updated, curIdx, curIdx - 1)
+                                                                        activeList = updated
+                                                                        dragAccumulatedY += step
+                                                                        curIdx--
+                                                                        haptic.tick()
+                                                                    }
+                                                                }
+                                                            }
+                                                        )
+                                                    } finally {
+                                                        // Always cleanly reset drag state so the card never stays frozen or overlapping
+                                                        draggingRoute = null
+                                                        dragAccumulatedY = 0f
+                                                    }
+                                                },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.DragIndicator,
+                                                contentDescription = "Перетащить: ${screen.title}",
+                                                tint = if (isBeingDragged) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                                            )
+                                        }
                                     }
                                 }
                             }

@@ -48,6 +48,7 @@ interface SchoolRepository {
     suspend fun deleteHomeworkResult(partId: Long, fileId: Long): Result<Unit>
     
     suspend fun login(login: String, rawPassword: String, captchaToken: String? = null): Result<UserProfile>
+    suspend fun loginDemo(): Result<UserProfile> = Result.failure(UnsupportedOperationException("Demo not supported"))
     fun isUserLoggedIn(): Boolean
     fun getUserProfile(): UserProfile?
     fun logout()
