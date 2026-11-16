@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
@@ -21,6 +22,12 @@ import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.Alignment
@@ -43,6 +50,14 @@ import org.youschool.app.ui.screens.schedule.GradeBadge
 import org.youschool.app.ui.theme.*
 import org.youschool.app.ui.util.rememberHaptic
 
+private enum class ProfileSettingsSection(val title: String, val icon: ImageVector) {
+    APPEARANCE("Оформление", Icons.Rounded.Palette),
+    NAVIGATION("Навигация и отклик", Icons.Rounded.Tune),
+    NOTIFICATIONS("Уведомления", Icons.Rounded.NotificationsActive),
+    GRADES("Оценки", Icons.Rounded.Grade),
+    ABOUT("О приложении", Icons.Rounded.Info)
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
@@ -54,7 +69,9 @@ fun ProfileScreen(
 ) {
     val profile = repository.getUserProfile()
     val themeSettings by themeManager.themeSettings.collectAsState()
-    val scrollState = rememberScrollState()
+    var selectedSection by rememberSaveable { mutableStateOf<ProfileSettingsSection?>(null) }
+    val pageState = rememberSaveableStateHolder()
+    BackHandler(enabled = selectedSection != null) { selectedSection = null }
     val haptic = rememberHaptic()
     val context = LocalContext.current
 
@@ -177,9 +194,16 @@ fun ProfileScreen(
     Scaffold(
         topBar = {
             TopAppBar(
+                navigationIcon = {
+                    if (selectedSection != null) {
+                        IconButton(onClick = { selectedSection = null }) {
+                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Назад")
+                        }
+                    }
+                },
                 title = {
                     Text(
-                        text = "Профиль",
+                        text = selectedSection?.title ?: "Профиль",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
@@ -187,6 +211,8 @@ fun ProfileScreen(
             )
         }
     ) { innerPadding ->
+        pageState.SaveableStateProvider(selectedSection?.name ?: "profile") {
+        val scrollState = rememberScrollState()
         Column(
             modifier = modifier
                 .fillMaxSize()
@@ -195,6 +221,7 @@ fun ProfileScreen(
                 .padding(horizontal = 20.dp, vertical = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            if (selectedSection == null) {
             Surface(
                 shape = MaterialTheme.shapes.extraLarge,
                 color = MaterialTheme.colorScheme.primaryContainer,
@@ -226,6 +253,50 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+                ProfileSettingsSection.entries.forEach { section ->
+                    val summary = when (section) {
+                        ProfileSettingsSection.APPEARANCE -> "${themeSettings.themeMode.title}, ${themeSettings.colorPalette.title}"
+                        ProfileSettingsSection.NAVIGATION -> "Пунктов: ${themeSettings.bottomBarRoutes.size} · ${themeSettings.navBarStyle.title}"
+                        ProfileSettingsSection.NOTIFICATIONS -> if (!themeSettings.areNotificationsEnabled) "Выключены" else
+                            listOfNotNull(
+                                "Новые оценки".takeIf { themeSettings.gradeNotificationsEnabled },
+                                "Напоминания о ДЗ".takeIf { themeSettings.homeworkNotificationsEnabled }
+                            ).joinToString(", ").ifEmpty { "Все типы выключены" }
+                        ProfileSettingsSection.GRADES -> "Цвета, оформление и вес оценок"
+                        ProfileSettingsSection.ABOUT -> "Версия $currentAppVersion, обновления"
+                    }
+                    ListItem(
+                        headlineContent = { Text(section.title) },
+                        supportingContent = { Text(summary) },
+                        leadingContent = { Icon(section.icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                        trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        modifier = Modifier.fillMaxWidth().clickable(role = Role.Button) {
+                            haptic.tick()
+                            selectedSection = section
+                        }
+                    )
+                }
+                val hiddenScreens = Screen.allMainScreens.filter { it.route !in themeSettings.bottomBarRoutes }
+                if (hiddenScreens.isNotEmpty()) {
+                    Spacer(Modifier.height(16.dp))
+                    HorizontalDivider()
+                    Text("Разделы приложения", style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 8.dp))
+                    hiddenScreens.forEach { screen ->
+                        ListItem(
+                            headlineContent = { Text(screen.title) },
+                            leadingContent = { screen.icon?.let { Icon(it, contentDescription = null) } },
+                            trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null) },
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                            modifier = Modifier.fillMaxWidth().clickable(role = Role.Button) { onNavigate(screen.route) }
+                        )
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+            }
+
+            if (selectedSection == ProfileSettingsSection.APPEARANCE) {
             // 1. Оформление и тема
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -333,6 +404,9 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            }
+
+            if (selectedSection == ProfileSettingsSection.NAVIGATION) {
             // 2. Навигация и отклик
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -512,6 +586,9 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            }
+
+            if (selectedSection == ProfileSettingsSection.NOTIFICATIONS) {
             // 3. Уведомления
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -599,6 +676,9 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            }
+
+            if (selectedSection == ProfileSettingsSection.GRADES) {
             // 4. Окрашивание оценок
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -991,6 +1071,9 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            }
+
+            if (selectedSection == ProfileSettingsSection.ABOUT) {
             // 6. Обновления приложения
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -1119,6 +1202,9 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(14.dp))
 
+            }
+
+            if (selectedSection == null) {
             // 5. Выход из аккаунта
             OutlinedButton(
                 onClick = {
@@ -1139,7 +1225,10 @@ fun ProfileScreen(
                 Text("Выйти из аккаунта", fontWeight = FontWeight.SemiBold)
             }
 
+            }
+
             Spacer(modifier = Modifier.height(28.dp + LocalBottomBarPadding.current).navigationBarsPadding())
+        }
         }
     }
 }
