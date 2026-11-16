@@ -35,6 +35,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
+import org.youschool.app.ui.components.BottomBarItemsEditor
+import org.youschool.app.ui.navigation.Screen
 import org.youschool.app.ui.screens.schedule.GradeBadge
 import org.youschool.app.ui.theme.*
 import org.youschool.app.ui.util.rememberHaptic
@@ -811,6 +813,10 @@ private fun StepNavigationAndHaptic(
                     }
 
                     // Navigation bar preview
+                    val previewScreens = settings.bottomBarRoutes.mapNotNull { route ->
+                        Screen.allMainScreens.find { it.route == route }
+                    }
+
                     if (settings.navBarStyle == NavigationBarStyle.STANDARD) {
                         Surface(
                             shape = RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp),
@@ -826,12 +832,12 @@ private fun StepNavigationAndHaptic(
                                 horizontalArrangement = Arrangement.SpaceAround,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                repeat(4) {
+                                previewScreens.forEachIndexed { i, _ ->
                                     Box(
                                         modifier = Modifier
-                                            .size(if (it == 0) 14.dp else 8.dp, 8.dp)
+                                            .size(if (i == 0) 14.dp else 8.dp, 8.dp)
                                             .clip(CircleShape)
-                                            .background(if (it == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.6f))
+                                            .background(if (i == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.6f))
                                     )
                                 }
                             }
@@ -859,12 +865,12 @@ private fun StepNavigationAndHaptic(
                                     horizontalArrangement = Arrangement.SpaceAround,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    repeat(4) {
+                                    previewScreens.forEachIndexed { i, _ ->
                                         Box(
                                             modifier = Modifier
-                                                .size(if (it == 0) 18.dp else 8.dp, 8.dp)
+                                                .size(if (i == 0) 18.dp else 8.dp, 8.dp)
                                                 .clip(RoundedCornerShape(4.dp))
-                                                .background(if (it == 0) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+                                                .background(if (i == 0) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
                                         )
                                     }
                                 }
@@ -982,6 +988,23 @@ private fun StepNavigationAndHaptic(
                     )
                 }
             }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Bottom Bar Items Editor (selection and reordering)
+        Surface(
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            BottomBarItemsEditor(
+                themeManager = themeManager,
+                settings = settings,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            )
         }
 
         Spacer(modifier = Modifier.height(20.dp))
