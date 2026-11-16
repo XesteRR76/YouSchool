@@ -26,6 +26,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.scale
+import kotlin.math.roundToInt
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.ui.semantics.semantics
@@ -38,6 +46,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
@@ -58,7 +67,7 @@ private enum class ProfileSettingsSection(val title: String, val icon: ImageVect
     ABOUT("О приложении", Icons.Rounded.Info)
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ProfileScreen(
     repository: SchoolRepository,
@@ -255,7 +264,7 @@ fun ProfileScreen(
 
                 ProfileSettingsSection.entries.forEach { section ->
                     val summary = when (section) {
-                        ProfileSettingsSection.APPEARANCE -> "${themeSettings.themeMode.title}, ${themeSettings.colorPalette.title}"
+                        ProfileSettingsSection.APPEARANCE -> "${themeSettings.themeMode.title} · ${if (themeSettings.isDynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) "Адаптивная" else themeSettings.colorPalette.title}"
                         ProfileSettingsSection.NAVIGATION -> "Пунктов: ${themeSettings.bottomBarRoutes.size} · ${themeSettings.navBarStyle.title}"
                         ProfileSettingsSection.NOTIFICATIONS -> if (!themeSettings.areNotificationsEnabled) "Выключены" else
                             listOfNotNull(
@@ -344,6 +353,46 @@ fun ProfileScreen(
                         }
                     }
 
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        Spacer(modifier = Modifier.height(14.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(MaterialTheme.shapes.small)
+                                .clickable {
+                                    haptic.click()
+                                    themeManager.setDynamicColorEnabled(!themeSettings.isDynamicColor)
+                                }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Адаптивная тема (Material You)",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = "Использовать цвета обоев устройства",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.outline
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Switch(
+                                checked = themeSettings.isDynamicColor,
+                                onCheckedChange = { enabled ->
+                                    haptic.click()
+                                    themeManager.setDynamicColorEnabled(enabled)
+                                }
+                            )
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(16.dp))
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     Spacer(modifier = Modifier.height(14.dp))
@@ -351,16 +400,13 @@ fun ProfileScreen(
                     Text(text = "Цветовая палитра", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.outline)
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    val paletteScrollState = rememberScrollState()
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(paletteScrollState),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         AppColorPalette.values().forEach { palette ->
-                            val isSelected = themeSettings.colorPalette == palette
+                            val isSelected = !themeSettings.isDynamicColor && themeSettings.colorPalette == palette
                             val borderColor by animateColorAsState(
                                 targetValue = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
                                 label = "border_color"
@@ -369,12 +415,13 @@ fun ProfileScreen(
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 modifier = Modifier
+                                    .width(68.dp)
                                     .clip(MaterialTheme.shapes.small)
                                     .clickable {
                                         haptic.tick()
                                         themeManager.setColorPalette(palette)
                                     }
-                                    .padding(4.dp)
+                                    .padding(vertical = 4.dp)
                             ) {
                                 Box(
                                     modifier = Modifier
@@ -394,7 +441,10 @@ fun ProfileScreen(
                                     text = palette.title,
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -451,37 +501,205 @@ fun ProfileScreen(
 
                     Text("Пункты нижней панели", style = MaterialTheme.typography.titleMedium)
                     Text("От 2 до 5 пунктов. Профиль всегда доступен.", style = MaterialTheme.typography.bodySmall)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    ) {
+                        Icon(
+                            Icons.Rounded.DragIndicator,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Зажмите значок справа для перемещения плашки",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+
                     val routes = themeSettings.bottomBarRoutes
-                    val orderedScreens = routes.mapNotNull { route -> Screen.allMainScreens.find { it.route == route } } +
-                        Screen.allMainScreens.filter { it.route !in routes }
-                    orderedScreens.forEach { screen ->
-                        val index = routes.indexOf(screen.route)
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(
-                                modifier = Modifier.semantics { contentDescription = screen.title },
-                                checked = index >= 0,
-                                enabled = screen != Screen.Profile && (index < 0 || routes.size > 2),
-                                onCheckedChange = { checked ->
-                                    themeManager.setBottomBarRoutes(if (checked) routes + screen.route else routes - screen.route)
+                    var activeList by remember(routes) { mutableStateOf(routes) }
+                    var draggedIndex by remember { mutableStateOf<Int?>(null) }
+                    var dragAccumulatedY by remember { mutableFloatStateOf(0f) }
+                    val itemStepPx = with(androidx.compose.ui.platform.LocalDensity.current) { 62.dp.toPx() }
+
+                    // Draggable active routes
+                    activeList.forEachIndexed { index, route ->
+                        val screen = Screen.allMainScreens.find { it.route == route }
+                        if (screen != null) {
+                            val isBeingDragged = draggedIndex == index
+                            val cardOffset = if (isBeingDragged) dragAccumulatedY.roundToInt() else 0
+
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 3.dp)
+                                    .zIndex(if (isBeingDragged) 2f else 1f)
+                                    .offset { IntOffset(0, cardOffset) }
+                                    .scale(if (isBeingDragged) 1.02f else 1f)
+                                    .shadow(if (isBeingDragged) 8.dp else 1.dp, shape = RoundedCornerShape(12.dp)),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isBeingDragged)
+                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                                    else
+                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Checkbox(
+                                        modifier = Modifier.semantics { contentDescription = screen.title },
+                                        checked = true,
+                                        enabled = screen != Screen.Profile && routes.size > 2,
+                                        onCheckedChange = { checked ->
+                                            if (!checked) {
+                                                val updated = routes - screen.route
+                                                themeManager.setBottomBarRoutes(updated)
+                                            }
+                                        }
+                                    )
+                                    screen.icon?.let { icon ->
+                                        Icon(
+                                            imageVector = icon,
+                                            contentDescription = null,
+                                            tint = if (isBeingDragged) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                    }
+                                    Text(
+                                        text = screen.title,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .pointerInput(screen.route) {
+                                                detectDragGestures(
+                                                    onDragStart = {
+                                                        draggedIndex = index
+                                                        dragAccumulatedY = 0f
+                                                        haptic.tick()
+                                                    },
+                                                    onDragEnd = {
+                                                        themeManager.setBottomBarRoutes(activeList)
+                                                        draggedIndex = null
+                                                        dragAccumulatedY = 0f
+                                                        haptic.click()
+                                                    },
+                                                    onDragCancel = {
+                                                        themeManager.setBottomBarRoutes(activeList)
+                                                        draggedIndex = null
+                                                        dragAccumulatedY = 0f
+                                                    },
+                                                    onDrag = { change, dragAmount ->
+                                                        change.consume()
+                                                        dragAccumulatedY += dragAmount.y
+                                                        val curIdx = draggedIndex ?: return@detectDragGestures
+                                                        if (dragAccumulatedY > itemStepPx * 0.5f && curIdx < activeList.lastIndex) {
+                                                            val updated = activeList.toMutableList()
+                                                            java.util.Collections.swap(updated, curIdx, curIdx + 1)
+                                                            activeList = updated
+                                                            draggedIndex = curIdx + 1
+                                                            dragAccumulatedY -= itemStepPx
+                                                            haptic.tick()
+                                                            themeManager.setBottomBarRoutes(updated)
+                                                        } else if (dragAccumulatedY < -itemStepPx * 0.5f && curIdx > 0) {
+                                                            val updated = activeList.toMutableList()
+                                                            java.util.Collections.swap(updated, curIdx, curIdx - 1)
+                                                            activeList = updated
+                                                            draggedIndex = curIdx - 1
+                                                            dragAccumulatedY += itemStepPx
+                                                            haptic.tick()
+                                                            themeManager.setBottomBarRoutes(updated)
+                                                        }
+                                                    }
+                                                )
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.DragIndicator,
+                                            contentDescription = "Перетащить: ${screen.title}",
+                                            tint = if (isBeingDragged) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                                        )
+                                    }
                                 }
-                            )
-                            Text(screen.title, Modifier.weight(1f))
-                            if (index >= 0) {
-                                IconButton(enabled = index > 0, onClick = {
-                                    val updated = routes.toMutableList()
-                                    java.util.Collections.swap(updated, index, index - 1)
-                                    themeManager.setBottomBarRoutes(updated)
-                                }) { Icon(Icons.Rounded.KeyboardArrowUp, "Выше: ${screen.title}") }
-                                IconButton(enabled = index < routes.lastIndex, onClick = {
-                                    val updated = routes.toMutableList()
-                                    java.util.Collections.swap(updated, index, index + 1)
-                                    themeManager.setBottomBarRoutes(updated)
-                                }) { Icon(Icons.Rounded.KeyboardArrowDown, "Ниже: ${screen.title}") }
-                            } else {
-                                TextButton(onClick = { onNavigate(screen.route) }) { Text("Открыть") }
                             }
                         }
                     }
+
+                    // Hidden/available screens to add
+                    val hiddenScreens = Screen.allMainScreens.filter { it.route !in routes }
+                    if (hiddenScreens.isNotEmpty()) {
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            text = "Скрытые пункты",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        hiddenScreens.forEach { screen ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 3.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Checkbox(
+                                        modifier = Modifier.semantics { contentDescription = screen.title },
+                                        checked = false,
+                                        enabled = routes.size < 5,
+                                        onCheckedChange = { checked ->
+                                            if (checked && routes.size < 5) {
+                                                themeManager.setBottomBarRoutes(routes + screen.route)
+                                            }
+                                        }
+                                    )
+                                    screen.icon?.let { icon ->
+                                        Icon(
+                                            imageVector = icon,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.outline,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                    }
+                                    Text(
+                                        text = screen.title,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.outline,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    TextButton(onClick = { onNavigate(screen.route) }) {
+                                        Text("Открыть")
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(8.dp))
                     TextButton(onClick = { themeManager.setBottomBarRoutes(BottomBarConfig.defaults) }) { Text("Сбросить панель") }
                     Spacer(Modifier.height(16.dp))
 

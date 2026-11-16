@@ -3,7 +3,9 @@ package org.youschool.app.ui.screens.grades
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -84,6 +86,9 @@ class GradesViewModel(private val repository: SchoolRepository) : ViewModel() {
         viewModelScope.launch {
             _isRefreshing.value = true
             repository.syncGrades()
+            if (newGrades.value.isEmpty()) {
+                repository.unmarkAllGradesAsRead()
+            }
             _isRefreshing.value = false
         }
     }
@@ -476,34 +481,27 @@ fun NewGradesSection(
 
                         Spacer(modifier = Modifier.width(12.dp))
 
-                        Column {
+                        Column(modifier = Modifier.weight(1f, fill = false)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
                                     text = "Новые оценки",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                                    modifier = Modifier.defaultMinSize(minWidth = 24.dp, minHeight = 20.dp)
+                                Badge(
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary
                                 ) {
-                                    Box(
-                                        contentAlignment = Alignment.Center,
-                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
-                                    ) {
-                                        Text(
-                                            text = "${newGrades.size}",
-                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onPrimary,
-                                            maxLines = 1,
-                                            softWrap = false
-                                        )
-                                    }
+                                    Text(
+                                        text = "${newGrades.size}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold
+                                    )
                                 }
                             }
                             Text(
@@ -514,23 +512,12 @@ fun NewGradesSection(
                         }
                     }
 
-                    // Compact preview badges or action buttons
+                    // Action buttons or expand icon
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.End
                     ) {
-                        if (!isExpanded) {
-                            // Show small preview of recent marks
-                            newGrades.take(2).forEach { g ->
-                                GradeBadge(
-                                    mark = g.value,
-                                    weight = g.weight,
-                                    showWeightSuperscript = true,
-                                    modifier = Modifier.padding(start = 4.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(4.dp))
-                        } else {
+                        if (isExpanded) {
                             IconButton(onClick = onDismissAll) {
                                 Icon(
                                     Icons.Rounded.DoneAll,
@@ -545,6 +532,45 @@ fun NewGradesSection(
                             contentDescription = if (isExpanded) "Свернуть" else "Развернуть",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
+                }
+
+                // Recent preview badges under the title: only grade badges without detailed text
+                if (!isExpanded && newGrades.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val maxDisplay = 10
+                        newGrades.take(maxDisplay).forEach { g ->
+                            GradeBadge(
+                                mark = g.value,
+                                weight = g.weight,
+                                showWeightSuperscript = true
+                            )
+                        }
+                        if (newGrades.size > maxDisplay) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier.padding(horizontal = 8.dp)
+                                ) {
+                                    Text(
+                                        text = "+${newGrades.size - maxDisplay}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -999,23 +1025,42 @@ fun SubjectGradeCard(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text(
-                                    text = "Прогноз: ${sim.displayValue} (${simWStr})",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Text(
-                                    text = if (sim.isAdded) "Добавлено" else "Скрыто",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Вес: $simWStr • Смоделировано",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        text = "+ Добавлена в калькуляторе",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                GradeBadge(mark = sim.displayValue, weight = sim.weight)
                             }
                         }
                     }
 
-                    // Real grades list
-                    if (activeRealGrades.isNotEmpty()) {
-                        activeRealGrades.forEach { grade ->
+                    if (grades.isEmpty() && simulatedGrades.isEmpty()) {
+                        Text(
+                            text = "Детали оценок отсутствуют",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    } else {
+                        grades.forEach { g ->
+                            val isExcluded = simulation?.excludedGradeKeys?.contains(g.id) == true
+                            val gradeWeightStr = if (g.weight % 1.0 == 0.0) {
+                                g.weight.toInt().toString()
+                            } else {
+                                String.format(Locale.US, "%.1f", g.weight)
+                            }
+                            val lessonDay = formatGradeDisplayDate(g.lessonDate)
+                            val primaryDateStr = if (lessonDay.isNotBlank()) "Урок: $lessonDay" else formatGradeDisplayDate(g.date)
+                            val postingInfo = formatMarkPostingInfo(g.lessonDate, g.date)
+
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -1023,17 +1068,53 @@ fun SubjectGradeCard(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text(
-                                    text = grade.value.toString(),
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                                Text(
-                                    text = "Вес: ${grade.weight}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.outline
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Вес: $gradeWeightStr • $primaryDateStr",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (isExcluded) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface,
+                                        textDecoration = if (isExcluded) TextDecoration.LineThrough else TextDecoration.None
+                                    )
+                                    if (isExcluded) {
+                                        Text(
+                                            text = "Исключена в калькуляторе",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.error
+                                        )
+                                    } else {
+                                        val subtitleParts = listOfNotNull(
+                                            g.typeName.takeIf { it.isNotBlank() && it.length <= 30 && !it.contains(".") },
+                                            postingInfo
+                                        ).joinToString(" • ")
+
+                                        if (subtitleParts.isNotBlank()) {
+                                            Text(
+                                                text = subtitleParts,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.outline
+                                            )
+                                        }
+                                    }
+                                }
+                                GradeBadge(
+                                    mark = g.value,
+                                    weight = g.weight,
+                                    modifier = Modifier.padding(start = 8.dp)
                                 )
                             }
                         }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    FilledTonalButton(
+                        onClick = onOpenCalculator,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Icon(Icons.Rounded.Calculate, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(if (hasSimulation) "Изменить прогноз в калькуляторе" else "Калькулятор балла")
                     }
                 }
             }

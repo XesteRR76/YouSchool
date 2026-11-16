@@ -713,6 +713,7 @@ fun LessonCard(
                             AttachmentChips(
                                 files = lesson.homeworkFiles,
                                 downloadingFileId = downloadingFileId,
+                                isExpanded = isHomeworkExpanded,
                                 onFileClick = onAttachmentClick
                             )
                         }

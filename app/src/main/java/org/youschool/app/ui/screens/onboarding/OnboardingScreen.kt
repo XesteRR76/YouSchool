@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -38,7 +39,7 @@ import org.youschool.app.ui.screens.schedule.GradeBadge
 import org.youschool.app.ui.theme.*
 import org.youschool.app.ui.util.rememberHaptic
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun OnboardingScreen(
     themeManager: ThemeManager,
@@ -160,12 +161,17 @@ fun OnboardingScreen(
                 0 -> StepThemeAndPalette(themeManager, themeSettings)
                 1 -> StepGradeColorMode(themeManager, themeSettings)
                 2 -> StepNavigationAndHaptic(themeManager, themeSettings)
-                3 -> StepNotifications(themeManager, themeSettings)
+                3 -> StepNotifications(
+                    themeManager = themeManager,
+                    settings = themeSettings,
+                    isCurrentPage = pagerState.currentPage == 3
+                )
             }
         }
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun StepThemeAndPalette(
     themeManager: ThemeManager,
@@ -238,7 +244,7 @@ private fun StepThemeAndPalette(
                         color = MaterialTheme.colorScheme.primaryContainer
                     ) {
                         Text(
-                            text = "${settings.themeMode.title} • ${settings.colorPalette.title}",
+                            text = "${settings.themeMode.title} • ${if (settings.isDynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) "Адаптивная" else settings.colorPalette.title}",
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -339,21 +345,76 @@ private fun StepThemeAndPalette(
         Spacer(modifier = Modifier.height(24.dp))
 
         Text(
-            text = "Акцентная палитра",
+            text = "Цветовая палитра",
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.fillMaxWidth()
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            Spacer(modifier = Modifier.height(10.dp))
+            Surface(
+                shape = MaterialTheme.shapes.large,
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(MaterialTheme.shapes.large)
+                    .clickable {
+                        haptic.click()
+                        themeManager.setDynamicColorEnabled(!settings.isDynamicColor)
+                    }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Rounded.ColorLens,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = "Адаптивная тема (Material You)",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Использовать цвета обоев устройства",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                        }
+                    }
+                    Switch(
+                        checked = settings.isDynamicColor,
+                        onCheckedChange = { enabled ->
+                            haptic.click()
+                            themeManager.setDynamicColorEnabled(enabled)
+                        }
+                    )
+                }
+            }
+        }
 
-        Row(
+        Spacer(modifier = Modifier.height(14.dp))
+
+        FlowRow(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             AppColorPalette.values().forEach { palette ->
-                val isSelected = settings.colorPalette == palette
+                val isSelected = !settings.isDynamicColor && settings.colorPalette == palette
                 val borderColor by animateColorAsState(
                     targetValue = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
                     label = "border_color"
@@ -362,12 +423,13 @@ private fun StepThemeAndPalette(
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
+                        .width(68.dp)
                         .clip(MaterialTheme.shapes.small)
                         .clickable {
                             haptic.tick()
                             themeManager.setColorPalette(palette)
                         }
-                        .padding(4.dp)
+                        .padding(vertical = 4.dp)
                 ) {
                     Box(
                         modifier = Modifier
@@ -387,7 +449,10 @@ private fun StepThemeAndPalette(
                         text = palette.title,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -974,7 +1039,8 @@ private fun StepNavigationAndHaptic(
 @Composable
 private fun StepNotifications(
     themeManager: ThemeManager,
-    settings: ThemeSettings
+    settings: ThemeSettings,
+    isCurrentPage: Boolean
 ) {
     val scrollState = rememberScrollState()
     val haptic = rememberHaptic()
@@ -989,6 +1055,18 @@ private fun StepNotifications(
         } else {
             haptic.tick()
             themeManager.setNotificationsEnabled(false)
+        }
+    }
+
+    LaunchedEffect(isCurrentPage) {
+        if (isCurrentPage && settings.areNotificationsEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val hasPerm = ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!hasPerm) {
+                permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            }
         }
     }
 

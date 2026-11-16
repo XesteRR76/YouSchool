@@ -2,6 +2,7 @@ package org.youschool.app.domain.repository
 
 import java.io.File
 import org.youschool.app.domain.model.*
+import org.youschool.app.core.database.entities.PendingHomeworkUploadEntity
 import kotlinx.coroutines.flow.Flow
 import org.youschool.app.domain.model.Grade
 import org.youschool.app.domain.model.HomeworkResultFile
@@ -29,12 +30,19 @@ interface SchoolRepository {
     suspend fun markGradeAsRead(markKey: String)
     suspend fun markAllGradesAsRead()
     suspend fun restoreGradeReadStatus(markKeys: List<String>)
+    suspend fun unmarkAllGradesAsRead()
     suspend fun downloadHomeworkFile(fileId: Long, fileName: String, variantId: Long? = null): Result<File>
 
     suspend fun syncDayLessons(dateMillis: Long): Result<Unit>
     suspend fun syncGrades(): Result<Unit>
     suspend fun toggleHomeworkStatus(lessonId: Long, isDone: Boolean, comment: String? = null)
     suspend fun syncPendingHomeworkStatus(): Result<Unit>
+    suspend fun enqueueHomeworkResultUpload(partId: Long, file: File): Result<PendingHomeworkUploadEntity>
+    fun getPendingHomeworkUploads(partId: Long): Flow<List<PendingHomeworkUploadEntity>>
+    suspend fun syncPendingHomeworkUploads(): Result<Unit>
+    suspend fun removePendingHomeworkUpload(uploadId: Long): Result<Unit>
+    fun getPendingSyncCount(): Flow<Int>
+    suspend fun syncAllPending(): Result<Unit>
     suspend fun getHomeworkResultFiles(partId: Long): Result<List<HomeworkResultFile>>
     suspend fun uploadHomeworkResult(partId: Long, file: File): Result<HomeworkResultFile>
     suspend fun deleteHomeworkResult(partId: Long, fileId: Long): Result<Unit>

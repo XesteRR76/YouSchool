@@ -13,9 +13,10 @@ import org.youschool.app.core.database.entities.*
         GradeEntity::class,
         HomeworkStatusEntity::class,
         ReadGradeEntity::class,
-        PendingHomeworkSyncEntity::class
+        PendingHomeworkSyncEntity::class,
+        PendingHomeworkUploadEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class YouSchoolDatabase : RoomDatabase() {
@@ -24,6 +25,7 @@ abstract class YouSchoolDatabase : RoomDatabase() {
     abstract fun homeworkStatusDao(): HomeworkStatusDao
     abstract fun readGradeDao(): ReadGradeDao
     abstract fun pendingHomeworkSyncDao(): PendingHomeworkSyncDao
+    abstract fun pendingHomeworkUploadDao(): PendingHomeworkUploadDao
 
     companion object {
         @Volatile

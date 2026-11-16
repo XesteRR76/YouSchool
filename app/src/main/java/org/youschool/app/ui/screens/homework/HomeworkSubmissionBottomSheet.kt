@@ -7,6 +7,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -29,6 +30,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.youschool.app.domain.model.HomeworkResultFile
@@ -62,6 +64,7 @@ fun HomeworkSubmissionBottomSheet(
     var isUploading by remember { mutableStateOf(false) }
     var downloadingFileId by remember { mutableStateOf<Long?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    val pendingUploads by (if (partId != null) repository.getPendingHomeworkUploads(partId) else flowOf(emptyList())).collectAsState(initial = emptyList())
 
     fun refreshFiles() {
         if (partId == null) {
@@ -109,8 +112,13 @@ fun HomeworkSubmissionBottomSheet(
                         Toast.makeText(context, "Файл успешно прикреплен к заданию!", Toast.LENGTH_SHORT).show()
                         refreshFiles()
                     } else {
-                        val err = uploadResult.exceptionOrNull()?.message ?: "Ошибка прикрепления файла"
-                        Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                        val enqueueRes = repository.enqueueHomeworkResultUpload(partId, tempFile)
+                        if (enqueueRes.isSuccess) {
+                            Toast.makeText(context, "Файл сохранен! Он отправится учителю при появлении интернета", Toast.LENGTH_LONG).show()
+                        } else {
+                            val err = uploadResult.exceptionOrNull()?.message ?: "Ошибка прикрепления файла"
+                            Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                        }
                     }
                 } catch (e: Exception) {
                     isUploading = false
@@ -202,7 +210,7 @@ fun HomeworkSubmissionBottomSheet(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "Прикрепленные решения (${resultFiles.size})",
+                    text = "Прикрепленные решения (${resultFiles.size + pendingUploads.size})",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -260,7 +268,7 @@ fun HomeworkSubmissionBottomSheet(
                 ) {
                     CircularProgressIndicator(modifier = Modifier.size(32.dp))
                 }
-            } else if (resultFiles.isEmpty() && !isUploading) {
+            } else if (resultFiles.isEmpty() && pendingUploads.isEmpty() && !isUploading) {
                 Surface(
                     shape = MaterialTheme.shapes.medium,
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
@@ -299,6 +307,65 @@ fun HomeworkSubmissionBottomSheet(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    pendingUploads.forEach { pending ->
+                        Surface(
+                            shape = MaterialTheme.shapes.medium,
+                            color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.3f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.CloudOff,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.tertiary,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text(
+                                            text = pending.fileName,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = "Ожидает отправки (офлайн)",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.tertiary
+                                        )
+                                    }
+                                }
+                                IconButton(
+                                    onClick = {
+                                        coroutineScope.launch {
+                                            repository.removePendingHomeworkUpload(pending.id)
+                                            Toast.makeText(context, "Файл удален из очереди", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.DeleteOutline,
+                                        contentDescription = "Удалить",
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     resultFiles.forEach { file ->
                         ResultFileRow(
                             file = file,

@@ -6,6 +6,7 @@ import org.youschool.app.core.database.entities.GradeEntity
 import org.youschool.app.core.database.entities.HomeworkStatusEntity
 import org.youschool.app.core.database.entities.LessonEntity
 import org.youschool.app.core.database.entities.PendingHomeworkSyncEntity
+import org.youschool.app.core.database.entities.PendingHomeworkUploadEntity
 import org.youschool.app.core.database.entities.ReadGradeEntity
 
 @Dao
@@ -108,4 +109,31 @@ interface PendingHomeworkSyncDao {
 
     @Query("DELETE FROM pending_homework_sync WHERE partId = :partId")
     suspend fun remove(partId: Long)
+
+    @Query("SELECT COUNT(*) FROM pending_homework_sync")
+    fun getPendingCountFlow(): Flow<Int>
+}
+
+@Dao
+interface PendingHomeworkUploadDao {
+    @Query("SELECT * FROM pending_homework_upload ORDER BY timestamp ASC")
+    fun getAllPendingFlow(): Flow<List<PendingHomeworkUploadEntity>>
+
+    @Query("SELECT * FROM pending_homework_upload WHERE partId = :partId ORDER BY timestamp ASC")
+    fun getPendingForPartFlow(partId: Long): Flow<List<PendingHomeworkUploadEntity>>
+
+    @Query("SELECT * FROM pending_homework_upload ORDER BY timestamp ASC")
+    suspend fun getAllPendingList(): List<PendingHomeworkUploadEntity>
+
+    @Query("SELECT * FROM pending_homework_upload WHERE partId = :partId ORDER BY timestamp ASC")
+    suspend fun getPendingForPartList(partId: Long): List<PendingHomeworkUploadEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun enqueue(entity: PendingHomeworkUploadEntity): Long
+
+    @Query("DELETE FROM pending_homework_upload WHERE id = :id")
+    suspend fun remove(id: Long)
+
+    @Query("SELECT COUNT(*) FROM pending_homework_upload")
+    fun getPendingCountFlow(): Flow<Int>
 }

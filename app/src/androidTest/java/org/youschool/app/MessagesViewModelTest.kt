@@ -9,6 +9,7 @@ import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.youschool.app.domain.model.*
+import org.youschool.app.core.database.entities.PendingHomeworkUploadEntity
 import org.youschool.app.domain.repository.SchoolRepository
 import org.youschool.app.ui.screens.messages.MessagesViewModel
 import java.io.File
@@ -31,12 +32,19 @@ internal abstract class UnusedRepository : SchoolRepository {
     override fun getSubjectAverages(): Flow<List<SubjectAverage>> = error("Unexpected repository call")
     override suspend fun markGradeAsRead(markKey: String) = error("Unexpected repository call")
     override suspend fun markAllGradesAsRead() = error("Unexpected repository call")
+    override suspend fun unmarkAllGradesAsRead() {}
     override suspend fun restoreGradeReadStatus(markKeys: List<String>) = error("Unexpected repository call")
     override suspend fun downloadHomeworkFile(fileId: Long, fileName: String, variantId: Long?): Result<File> = error("Unexpected repository call")
     override suspend fun syncDayLessons(dateMillis: Long): Result<Unit> = error("Unexpected repository call")
     override suspend fun syncGrades(): Result<Unit> = error("Unexpected repository call")
     override suspend fun toggleHomeworkStatus(lessonId: Long, isDone: Boolean, comment: String?) = error("Unexpected repository call")
     override suspend fun syncPendingHomeworkStatus(): Result<Unit> = error("Unexpected repository call")
+    override suspend fun enqueueHomeworkResultUpload(partId: Long, file: File): Result<PendingHomeworkUploadEntity> = error("Unexpected repository call")
+    override fun getPendingHomeworkUploads(partId: Long): Flow<List<PendingHomeworkUploadEntity>> = error("Unexpected repository call")
+    override suspend fun syncPendingHomeworkUploads(): Result<Unit> = error("Unexpected repository call")
+    override suspend fun removePendingHomeworkUpload(uploadId: Long): Result<Unit> = error("Unexpected repository call")
+    override fun getPendingSyncCount(): Flow<Int> = error("Unexpected repository call")
+    override suspend fun syncAllPending(): Result<Unit> = error("Unexpected repository call")
     override suspend fun getHomeworkResultFiles(partId: Long): Result<List<HomeworkResultFile>> = error("Unexpected repository call")
     override suspend fun uploadHomeworkResult(partId: Long, file: File): Result<HomeworkResultFile> = error("Unexpected repository call")
     override suspend fun deleteHomeworkResult(partId: Long, fileId: Long): Result<Unit> = error("Unexpected repository call")

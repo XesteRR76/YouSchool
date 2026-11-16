@@ -61,3 +61,15 @@ data class PendingHomeworkSyncEntity(
     val comment: String? = null,
     val timestamp: Long = System.currentTimeMillis()
 )
+
+@Entity(tableName = "pending_homework_upload")
+data class PendingHomeworkUploadEntity(
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+    val partId: Long,
+    val localFilePath: String,
+    val fileName: String,
+    val fileSize: Long,
+    val fileType: String? = null,
+    val timestamp: Long = System.currentTimeMillis()
+)

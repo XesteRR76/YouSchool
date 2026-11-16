@@ -50,6 +50,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import org.youschool.app.core.update.AppRelease
 import org.youschool.app.core.update.AppUpdateChecker
+import org.youschool.app.ui.components.OfflineBanner
 import org.youschool.app.ui.components.UpdateNotificationBanner
 import org.youschool.app.ui.screens.messages.MessagesScreen
 import org.youschool.app.ui.navigation.Screen
@@ -81,6 +82,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val themeSettings by app.themeManager.themeSettings.collectAsState()
+            val syncStatus by app.syncManager.syncStatus.collectAsState()
             val haptic = rememberHaptic()
 
             YouSchoolTheme(settings = themeSettings) {
@@ -114,7 +116,6 @@ class MainActivity : ComponentActivity() {
                     val currentRoute = navBackStackEntry?.destination?.route
 
                     val onTabClick: (String) -> Unit = { route ->
-                        haptic.tick()
                         navController.navigate(route) {
                             popUpTo(navController.graph.findStartDestination().id) {
                                 saveState = true
@@ -149,13 +150,17 @@ class MainActivity : ComponentActivity() {
                     Box(modifier = Modifier.fillMaxSize()) {
                         Scaffold(
                             modifier = Modifier.fillMaxSize(),
+                            contentWindowInsets = WindowInsets(0, 0, 0, 0),
                             bottomBar = {
                                 if (currentRoute != Screen.Auth.route && themeSettings.navBarStyle == NavigationBarStyle.STANDARD && !imeVisible) {
                                     NavigationBar {
                                         bottomScreens.forEach { screen ->
                                             NavigationBarItem(
                                                 selected = currentRoute == screen.route,
-                                                onClick = { onTabClick(screen.route) },
+                                                onClick = {
+                                                    haptic.click()
+                                                    onTabClick(screen.route)
+                                                },
                                                 icon = {
                                                     screen.icon?.let {
                                                         Icon(imageVector = it, contentDescription = screen.title)
@@ -169,60 +174,87 @@ class MainActivity : ComponentActivity() {
                             }
                         ) { innerPadding ->
                             CompositionLocalProvider(LocalBottomBarPadding provides bottomBarPadding) {
-                                NavHost(
-                                    navController = navController,
-                                    startDestination = startDestination,
-                                    modifier = Modifier.padding(
-                                        top = innerPadding.calculateTopPadding(),
-                                        bottom = if (themeSettings.navBarStyle == NavigationBarStyle.STANDARD) innerPadding.calculateBottomPadding() else 0.dp
-                                    )
+                                val isBannerVisible = (syncStatus.isOfflineMode || syncStatus.isSyncing) && currentRoute != Screen.Auth.route
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(
+                                            bottom = if (themeSettings.navBarStyle == NavigationBarStyle.STANDARD) innerPadding.calculateBottomPadding() else 0.dp
+                                        )
                                 ) {
-                                    composable(Screen.Auth.route) {
-                                        val authViewModel = remember { AuthViewModel(repository) }
-                                        AuthScreen(
-                                            viewModel = authViewModel,
-                                            onLoginSuccess = {
-                                                navController.navigate(Screen.Schedule.route) {
-                                                    popUpTo(Screen.Auth.route) { inclusive = true }
-                                                }
-                                            }
+                                    if (isBannerVisible) {
+                                        OfflineBanner(
+                                            syncStatus = syncStatus,
+                                            onRetrySync = { app.syncManager.triggerSync() },
+                                            modifier = Modifier.statusBarsPadding()
                                         )
                                     }
-
-                                    composable(Screen.Schedule.route) {
-                                        val scheduleViewModel = remember { ScheduleViewModel(repository) }
-                                        ScheduleScreen(viewModel = scheduleViewModel)
-                                    }
-
-                                    composable(Screen.Grades.route) {
-                                        val gradesViewModel = remember { GradesViewModel(repository) }
-                                        GradesScreen(viewModel = gradesViewModel)
-                                    }
-
-                                    composable(Screen.Homework.route) {
-                                        val homeworkViewModel = remember { HomeworkViewModel(repository) }
-                                        HomeworkScreen(viewModel = homeworkViewModel)
-                                    }
-
-                                    composable(Screen.Messages.route) {
-                                        MessagesScreen(repository = repository)
-                                    }
-
-                                    composable(Screen.Profile.route) {
-                                        ProfileScreen(
-                                            repository = repository,
-                                            themeManager = app.themeManager,
-                                            onNavigate = onTabClick,
-                                            onLogout = {
-                                                navController.navigate(Screen.Auth.route) {
-                                                    popUpTo(0) { inclusive = true }
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .then(
+                                                if (isBannerVisible) {
+                                                    Modifier.consumeWindowInsets(WindowInsets.statusBars)
+                                                } else if (currentRoute == Screen.Auth.route) {
+                                                    Modifier.statusBarsPadding()
+                                                } else {
+                                                    Modifier
                                                 }
-                                            }
-                                        )
+                                            )
+                                    ) {
+                                        NavHost(
+                                            navController = navController,
+                                            startDestination = startDestination,
+                                            modifier = Modifier.fillMaxSize()
+                                        ) {
+                                        composable(Screen.Auth.route) {
+                                            val authViewModel = remember { AuthViewModel(repository) }
+                                            AuthScreen(
+                                                viewModel = authViewModel,
+                                                onLoginSuccess = {
+                                                    navController.navigate(Screen.Schedule.route) {
+                                                        popUpTo(Screen.Auth.route) { inclusive = true }
+                                                    }
+                                                }
+                                            )
+                                        }
+
+                                        composable(Screen.Schedule.route) {
+                                            val scheduleViewModel = remember { ScheduleViewModel(repository) }
+                                            ScheduleScreen(viewModel = scheduleViewModel)
+                                        }
+
+                                        composable(Screen.Grades.route) {
+                                            val gradesViewModel = remember { GradesViewModel(repository) }
+                                            GradesScreen(viewModel = gradesViewModel)
+                                        }
+
+                                        composable(Screen.Homework.route) {
+                                            val homeworkViewModel = remember { HomeworkViewModel(repository) }
+                                            HomeworkScreen(viewModel = homeworkViewModel)
+                                        }
+
+                                        composable(Screen.Messages.route) {
+                                            MessagesScreen(repository = repository)
+                                        }
+
+                                        composable(Screen.Profile.route) {
+                                            ProfileScreen(
+                                                repository = repository,
+                                                themeManager = app.themeManager,
+                                                onNavigate = onTabClick,
+                                                onLogout = {
+                                                    navController.navigate(Screen.Auth.route) {
+                                                        popUpTo(0) { inclusive = true }
+                                                    }
+                                                }
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
+                    }
 
                         if (isFloatingPill) {
                             FloatingPillNavigationBar(
@@ -373,6 +405,7 @@ fun FloatingPillNavigationBar(
                     val touchSlop = viewConfiguration.touchSlop
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
+                        haptic.click()
                         val startX = down.position.x
                         val initialPillLeft = if (isDragging) dragOffsetPx else pillOffsetAnimatable.value
                         val pillCenter = paddingPx + initialPillLeft + capsuleWidthPx / 2f
@@ -397,7 +430,6 @@ fun FloatingPillNavigationBar(
                                 if (abs(dx) > threshold) {
                                     draggingActive = true
                                     isDragging = true
-                                    haptic.tick()
                                 }
                             }
 
@@ -420,7 +452,6 @@ fun FloatingPillNavigationBar(
                                 if (currentHoveredIndex != lastHoveredIndex) {
                                     lastHoveredIndex = currentHoveredIndex
                                     hoveredTabIndex = currentHoveredIndex
-                                    haptic.tick()
                                 }
                             }
                         }
@@ -448,7 +479,6 @@ fun FloatingPillNavigationBar(
                             val targetRoute = screens.getOrNull(nearestIndex)?.route
                             if (targetRoute != null && targetRoute != currentRoute) {
                                 onNavigate(targetRoute)
-                                haptic.click()
                             }
                         } else {
                             // Simple tap
@@ -468,7 +498,6 @@ fun FloatingPillNavigationBar(
 
                             if (targetRoute != null && targetRoute != currentRoute) {
                                 onNavigate(targetRoute)
-                                haptic.click()
                             }
                         }
                         hoveredTabIndex = null

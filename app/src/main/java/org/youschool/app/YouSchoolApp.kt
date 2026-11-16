@@ -31,6 +31,9 @@ class YouSchoolApp : Application() {
     lateinit var networkMonitor: NetworkMonitor
         private set
 
+    lateinit var syncManager: org.youschool.app.core.sync.SyncManager
+        private set
+
     override fun onCreate() {
         super.onCreate()
         instance = this
@@ -41,9 +44,8 @@ class YouSchoolApp : Application() {
         apiClient = EschoolApiClient(authManager)
         repository = SchoolRepositoryImpl(this, database, apiClient, authManager)
 
-        networkMonitor = NetworkMonitor(this) {
-            repository.syncPendingHomeworkStatus()
-        }
+        networkMonitor = NetworkMonitor(this)
+        syncManager = org.youschool.app.core.sync.SyncManager(repository, networkMonitor)
         networkMonitor.start()
 
         // Initialize notification channel for grade alerts
@@ -54,9 +56,7 @@ class YouSchoolApp : Application() {
         }
 
         // Attempt sync of any pending actions on app start
-        CoroutineScope(Dispatchers.IO).launch {
-            repository.syncPendingHomeworkStatus()
-        }
+        syncManager.triggerSync()
     }
 
     companion object {

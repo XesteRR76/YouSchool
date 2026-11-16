@@ -2,6 +2,7 @@ package org.youschool.app.ui.theme
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.os.Build
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -23,12 +24,19 @@ enum class AppThemeMode(val title: String) {
 }
 
 enum class AppColorPalette(val title: String, val primaryColor: Color) {
-    MONET("Monet", Color(0xFF6750A4)),
-    BLUE("Синий", Color(0xFF1976D2)),
+    BLUE("Синий", Color(0xFF1565C0)),
     PURPLE("Фиолетовый", Color(0xFF7C4DFF)),
     GREEN("Изумрудный", Color(0xFF2E7D32)),
     ORANGE("Янтарный", Color(0xFFE65100)),
-    RED("Рубиновый", Color(0xFFC2185B))
+    RED("Рубиновый", Color(0xFFC2185B)),
+    TEAL("Бирюзовый", Color(0xFF00796B)),
+    CYAN("Морской", Color(0xFF0288D1)),
+    INDIGO("Индиго", Color(0xFF3F51B5)),
+    PINK("Розовый", Color(0xFFD81B60)),
+    LIME("Лайм", Color(0xFF689F38)),
+    AMBER("Золотой", Color(0xFFF57F17)),
+    BROWN("Кофейный", Color(0xFF6D4C41)),
+    SLATE("Графитовый", Color(0xFF455A64))
 }
 
 enum class NavigationBarStyle(val title: String, val subtitle: String) {
@@ -76,7 +84,8 @@ data class WeightGradientSettings(
 
 data class ThemeSettings(
     val themeMode: AppThemeMode = AppThemeMode.SYSTEM,
-    val colorPalette: AppColorPalette = AppColorPalette.MONET,
+    val isDynamicColor: Boolean = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S),
+    val colorPalette: AppColorPalette = AppColorPalette.BLUE,
     val isHapticFeedbackEnabled: Boolean = true,
     val areNotificationsEnabled: Boolean = true,
     val gradeNotificationsEnabled: Boolean = true,
@@ -173,7 +182,9 @@ class ThemeManager(private val context: Context) {
 
     private fun loadSettings(): ThemeSettings {
         val modeName = prefs.getString("theme_mode", AppThemeMode.SYSTEM.name) ?: AppThemeMode.SYSTEM.name
-        val paletteName = prefs.getString("color_palette", AppColorPalette.MONET.name) ?: AppColorPalette.MONET.name
+        val defaultDynamic = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+        val isDynamic = prefs.getBoolean("is_dynamic_color", defaultDynamic)
+        val paletteName = prefs.getString("color_palette", AppColorPalette.BLUE.name) ?: AppColorPalette.BLUE.name
         val navName = prefs.getString("nav_bar_style", NavigationBarStyle.STANDARD.name) ?: NavigationBarStyle.STANDARD.name
         val gradeModeName = prefs.getString("grade_color_mode", GradeColorMode.BY_VALUE.name) ?: GradeColorMode.BY_VALUE.name
         val haptic = prefs.getBoolean("haptic_feedback_enabled", true)
@@ -181,7 +192,7 @@ class ThemeManager(private val context: Context) {
         val onboarding = prefs.getBoolean("has_completed_onboarding", false)
 
         val mode = try { AppThemeMode.valueOf(modeName) } catch (e: Exception) { AppThemeMode.SYSTEM }
-        val palette = try { AppColorPalette.valueOf(paletteName) } catch (e: Exception) { AppColorPalette.MONET }
+        val palette = try { AppColorPalette.valueOf(paletteName) } catch (e: Exception) { AppColorPalette.BLUE }
         val navStyle = try { NavigationBarStyle.valueOf(navName) } catch (e: Exception) { NavigationBarStyle.STANDARD }
         val gradeMode = try { GradeColorMode.valueOf(gradeModeName) } catch (e: Exception) { GradeColorMode.BY_VALUE }
 
@@ -208,6 +219,7 @@ class ThemeManager(private val context: Context) {
 
         return ThemeSettings(
             themeMode = mode,
+            isDynamicColor = isDynamic,
             colorPalette = palette,
             isHapticFeedbackEnabled = haptic,
             areNotificationsEnabled = notifications,
@@ -260,9 +272,20 @@ class ThemeManager(private val context: Context) {
         _themeSettings.value = _themeSettings.value.copy(themeMode = mode)
     }
 
+    fun setDynamicColorEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("is_dynamic_color", enabled).apply()
+        _themeSettings.value = _themeSettings.value.copy(isDynamicColor = enabled)
+    }
+
     fun setColorPalette(palette: AppColorPalette) {
-        prefs.edit().putString("color_palette", palette.name).apply()
-        _themeSettings.value = _themeSettings.value.copy(colorPalette = palette)
+        prefs.edit()
+            .putString("color_palette", palette.name)
+            .putBoolean("is_dynamic_color", false)
+            .apply()
+        _themeSettings.value = _themeSettings.value.copy(
+            colorPalette = palette,
+            isDynamicColor = false
+        )
     }
 
     fun setHapticFeedbackEnabled(enabled: Boolean) {

@@ -6,6 +6,10 @@ import org.junit.Test
 import org.youschool.app.ui.navigation.BottomBarConfig
 import org.youschool.app.core.notification.NotificationRules
 import org.youschool.app.domain.model.*
+import org.youschool.app.core.sync.SyncStatus
+import org.youschool.app.ui.theme.*
+import androidx.compose.ui.graphics.Color
+import java.io.File
 import java.time.*
 
 class FeatureRulesTest {
@@ -173,5 +177,66 @@ class FeatureRulesTest {
         for (response in listOf(SendMessageResponse(-2), SendMessageResponse(42, -3), SendMessageResponse(0))) {
             assertTrue(runCatching { response.requireSuccess() }.isFailure)
         }
+    }
+
+    @Test fun appVersionNameIsNormalizedAndMatchesSemVer() {
+        val buildGradle = File("app/build.gradle.kts")
+        if (buildGradle.exists()) {
+            val content = buildGradle.readText()
+            val match = Regex("""versionName\s*=\s*"([^"]+)"""").find(content)
+            assertNotNull(match)
+            val versionName = match!!.groupValues[1]
+            assertEquals("0.3.4", versionName)
+            assertNotEquals("3.4", versionName)
+        }
+    }
+
+    @Test fun paletteCatalogContains13ColorsAndNonPurplePalettesDoNotLeakPurple() {
+        assertEquals(13, AppColorPalette.values().size)
+
+        val defaultM3LightPurpleSecondaryContainer = Color(0xFFE8DEF8)
+        val defaultM3DarkPurpleSecondaryContainer = Color(0xFF4A4458)
+
+        for (palette in AppColorPalette.values()) {
+            assertTrue(palette.title.isNotBlank())
+            assertNotEquals(Color.Unspecified, palette.primaryColor)
+
+            val lightScheme = getStaticColorScheme(palette, isDark = false)
+            val darkScheme = getStaticColorScheme(palette, isDark = true)
+
+            assertNotNull(lightScheme)
+            assertNotNull(darkScheme)
+
+            if (palette != AppColorPalette.PURPLE) {
+                assertNotEquals("Palette ${palette.name} leaked M3 default purple secondaryContainer in light mode",
+                    defaultM3LightPurpleSecondaryContainer, lightScheme.secondaryContainer)
+                assertNotEquals("Palette ${palette.name} leaked M3 default purple secondaryContainer in dark mode",
+                    defaultM3DarkPurpleSecondaryContainer, darkScheme.secondaryContainer)
+            }
+        }
+    }
+
+    @Test fun themeSettingsDefaultsMatchSpecifications() {
+        val defaultSettings = ThemeSettings()
+        assertEquals(android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S, defaultSettings.isDynamicColor)
+        assertTrue(defaultSettings.areNotificationsEnabled)
+        assertEquals(AppColorPalette.BLUE, defaultSettings.colorPalette)
+    }
+
+    @Test fun offlineModeStatusEvaluatesCorrectly() {
+        val offlineNoPending = SyncStatus(isOnline = false, pendingCount = 0, isSyncing = false)
+        assertTrue(offlineNoPending.isOfflineMode)
+
+        val offlineWithPending = SyncStatus(isOnline = false, pendingCount = 3, isSyncing = false)
+        assertTrue(offlineWithPending.isOfflineMode)
+
+        val onlineWithPending = SyncStatus(isOnline = true, pendingCount = 2, isSyncing = false)
+        assertTrue(onlineWithPending.isOfflineMode)
+
+        val onlineClean = SyncStatus(isOnline = true, pendingCount = 0, isSyncing = false)
+        assertFalse(onlineClean.isOfflineMode)
+
+        val syncingState = SyncStatus(isOnline = true, pendingCount = 1, isSyncing = true)
+        assertTrue(syncingState.isSyncing)
     }
 }

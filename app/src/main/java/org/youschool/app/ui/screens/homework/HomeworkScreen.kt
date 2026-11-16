@@ -283,6 +283,7 @@ fun HomeworkScreen(
                                             AttachmentChips(
                                                 files = item.homeworkFiles,
                                                 downloadingFileId = downloadingFileId,
+                                                isExpanded = expandedHomeworkIds.contains(item.id),
                                                 onFileClick = { attachment ->
                                                     viewModel.openAttachment(context, attachment)
                                                 }

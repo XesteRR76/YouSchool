@@ -1,6 +1,8 @@
 package org.youschool.app.data.repository
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
@@ -21,6 +23,7 @@ import org.youschool.app.core.database.entities.GradeEntity
 import org.youschool.app.core.database.entities.HomeworkStatusEntity
 import org.youschool.app.core.database.entities.LessonEntity
 import org.youschool.app.core.database.entities.PendingHomeworkSyncEntity
+import org.youschool.app.core.database.entities.PendingHomeworkUploadEntity
 import org.youschool.app.core.database.entities.ReadGradeEntity
 import org.youschool.app.core.network.EschoolApiClient
 import org.youschool.app.core.network.dto.FileDto
@@ -331,6 +334,27 @@ class SchoolRepositoryImpl(
         }
     }
 
+    private fun isNetworkAvailable(): Boolean {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
+        val active = cm.activeNetwork ?: return false
+        val caps = cm.getNetworkCapabilities(active) ?: return false
+        if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) ||
+            !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) {
+            return false
+        }
+        if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) {
+            val hasPhysical = cm.allNetworks.any { net ->
+                if (net == active) return@any false
+                val c = cm.getNetworkCapabilities(net) ?: return@any false
+                !c.hasTransport(NetworkCapabilities.TRANSPORT_VPN) &&
+                        c.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                        c.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+            }
+            if (!hasPhysical) return false
+        }
+        return true
+    }
+
     override suspend fun toggleHomeworkStatus(lessonId: Long, isDone: Boolean, comment: String?) = withContext(Dispatchers.IO) {
         // 1. Instant local update for offline-first responsiveness
         database.homeworkStatusDao().setStatus(HomeworkStatusEntity(lessonId, isDone))
@@ -338,15 +362,23 @@ class SchoolRepositoryImpl(
         // 2. Synchronize with server if lesson has a homework partId
         val lesson = database.lessonDao().getLessonById(lessonId)
         val partId = lesson?.homeworkPartId
+        android.util.Log.d("SchoolRepository", "toggleHomeworkStatus: lessonId=$lessonId, partId=$partId, isNetworkAvailable=${isNetworkAvailable()}")
         if (partId != null) {
-            val result = apiClient.setHomeworkDone(partId, isDone, needRecheck = true, comment = comment)
-            if (result.isSuccess) {
-                database.pendingHomeworkSyncDao().remove(partId)
-            } else {
-                // If offline or network error, enqueue for background replay
+            if (!isNetworkAvailable()) {
+                android.util.Log.d("SchoolRepository", "Enqueuing offline homework sync: partId=$partId, isDone=$isDone")
                 database.pendingHomeworkSyncDao().enqueue(
                     PendingHomeworkSyncEntity(partId, lessonId, isDone, comment)
                 )
+            } else {
+                val result = apiClient.setHomeworkDone(partId, isDone, needRecheck = true, comment = comment)
+                if (result.isSuccess) {
+                    database.pendingHomeworkSyncDao().remove(partId)
+                } else {
+                    android.util.Log.d("SchoolRepository", "API failed, enqueuing offline sync: partId=$partId")
+                    database.pendingHomeworkSyncDao().enqueue(
+                        PendingHomeworkSyncEntity(partId, lessonId, isDone, comment)
+                    )
+                }
             }
         }
     }
@@ -364,6 +396,82 @@ class SchoolRepositoryImpl(
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    override suspend fun enqueueHomeworkResultUpload(partId: Long, file: File): Result<PendingHomeworkUploadEntity> = withContext(Dispatchers.IO) {
+        try {
+            val uploadsDir = File(context.filesDir, "pending_uploads").apply { mkdirs() }
+            val persistentFile = File(uploadsDir, "upload_${System.currentTimeMillis()}_${file.name}")
+            file.copyTo(persistentFile, overwrite = true)
+            val entity = PendingHomeworkUploadEntity(
+                partId = partId,
+                localFilePath = persistentFile.absolutePath,
+                fileName = file.name,
+                fileSize = persistentFile.length(),
+                fileType = null
+            )
+            val id = database.pendingHomeworkUploadDao().enqueue(entity)
+            Result.success(entity.copy(id = id))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override fun getPendingHomeworkUploads(partId: Long): Flow<List<PendingHomeworkUploadEntity>> {
+        return database.pendingHomeworkUploadDao().getPendingForPartFlow(partId)
+    }
+
+    override suspend fun syncPendingHomeworkUploads(): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val pending = database.pendingHomeworkUploadDao().getAllPendingList()
+            var failure: Exception? = null
+            for (item in pending) {
+                val file = File(item.localFilePath)
+                if (!file.exists()) {
+                    database.pendingHomeworkUploadDao().remove(item.id)
+                    continue
+                }
+                val uploadResult = uploadHomeworkResult(item.partId, file)
+                if (uploadResult.isSuccess) {
+                    database.pendingHomeworkUploadDao().remove(item.id)
+                    try { file.delete() } catch (_: Exception) {}
+                } else {
+                    failure = uploadResult.exceptionOrNull() as? Exception ?: Exception("Upload failed")
+                }
+            }
+            if (failure != null) Result.failure(failure) else Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun removePendingHomeworkUpload(uploadId: Long): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val pending = database.pendingHomeworkUploadDao().getAllPendingList().find { it.id == uploadId }
+            if (pending != null) {
+                try { File(pending.localFilePath).delete() } catch (_: Exception) {}
+            }
+            database.pendingHomeworkUploadDao().remove(uploadId)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override fun getPendingSyncCount(): Flow<Int> {
+        return combine(
+            database.pendingHomeworkSyncDao().getPendingCountFlow(),
+            database.pendingHomeworkUploadDao().getPendingCountFlow()
+        ) { a, b -> a + b }
+    }
+
+    override suspend fun syncAllPending(): Result<Unit> = withContext(Dispatchers.IO) {
+        var err: Throwable? = null
+        val statusRes = syncPendingHomeworkStatus()
+        if (statusRes.isFailure) err = statusRes.exceptionOrNull()
+        val uploadRes = syncPendingHomeworkUploads()
+        if (uploadRes.isFailure && err == null) err = uploadRes.exceptionOrNull()
+        if (err != null) Result.failure(err) else Result.success(Unit)
     }
 
     override suspend fun getHomeworkResultFiles(partId: Long): Result<List<HomeworkResultFile>> = withContext(Dispatchers.IO) {
@@ -468,6 +576,13 @@ class SchoolRepositoryImpl(
     override suspend fun restoreGradeReadStatus(markKeys: List<String>) {
         withContext(Dispatchers.IO) {
             database.readGradeDao().unmarkMultipleAsRead(markKeys)
+        }
+    }
+
+    override suspend fun unmarkAllGradesAsRead() {
+        withContext(Dispatchers.IO) {
+            val keys = database.readGradeDao().getAllReadGradeKeys()
+            database.readGradeDao().unmarkMultipleAsRead(keys)
         }
     }
 
