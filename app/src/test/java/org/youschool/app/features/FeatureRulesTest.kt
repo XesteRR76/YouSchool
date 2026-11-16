@@ -186,8 +186,8 @@ class FeatureRulesTest {
             val match = Regex("""versionName\s*=\s*"([^"]+)"""").find(content)
             assertNotNull(match)
             val versionName = match!!.groupValues[1]
-            assertEquals("0.3.6", versionName)
-            assertNotEquals("3.6", versionName)
+            assertEquals("0.3.7", versionName)
+            assertNotEquals("3.7", versionName)
         }
     }
 

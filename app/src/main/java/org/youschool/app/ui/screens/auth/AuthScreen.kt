@@ -63,11 +63,6 @@ class AuthViewModel(private val repository: SchoolRepository) : ViewModel() {
     }
 
     fun login(loginText: String, passwordText: String, captchaToken: String? = null) {
-        if (org.youschool.app.BuildConfig.DEBUG && loginText.trim().equals("demo", ignoreCase = true)) {
-            loginDemo()
-            return
-        }
-
         if (loginText.isBlank() || passwordText.isBlank()) {
             _uiState.value = AuthUiState.Error("Введите логин и пароль")
             return
@@ -86,14 +81,6 @@ class AuthViewModel(private val repository: SchoolRepository) : ViewModel() {
                     _uiState.value = AuthUiState.Error(errorMsg)
                 }
             }
-        }
-    }
-
-    fun loginDemo() {
-        viewModelScope.launch {
-            _uiState.value = AuthUiState.Loading
-            repository.loginDemo()
-            _uiState.value = AuthUiState.Success
         }
     }
 
@@ -295,19 +282,6 @@ fun AuthScreen(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
-                }
-            }
-
-            if (org.youschool.app.BuildConfig.DEBUG) {
-                Spacer(modifier = Modifier.height(8.dp))
-                TextButton(
-                    onClick = {
-                        focusManager.clearFocus()
-                        viewModel.loginDemo()
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Войти в демо-режиме (Debug)")
                 }
             }
         }
