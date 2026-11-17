@@ -46,6 +46,7 @@ import org.youschool.app.ui.components.FileOpener
 import org.youschool.app.ui.components.ImageViewerDialog
 import org.youschool.app.ui.components.PdfViewerDialog
 import org.youschool.app.ui.theme.LocalBottomBarPadding
+import org.youschool.app.ui.screens.grades.formatGradeWeight
 import org.youschool.app.ui.screens.homework.HomeworkSubmissionBottomSheet
 import org.youschool.app.ui.theme.*
 import org.youschool.app.ui.util.rememberHaptic
@@ -765,7 +766,7 @@ fun GradeBadge(
 
     val displayText = remember(mark, weight, showWeightSuperscript, isCompact, themeSettings.showGradeWeights, themeSettings.gradeWeightPosition) {
         if (themeSettings.showGradeWeights && showWeightSuperscript && weight != null && weight != 1.0) {
-            val weightStr = if (weight % 1.0 == 0.0) weight.toInt().toString() else "$weight"
+            val weightStr = formatGradeWeight(weight)
             val shift = if (themeSettings.gradeWeightPosition == GradeWeightPosition.SUBSCRIPT) {
                 BaselineShift.Subscript
             } else {
@@ -841,7 +842,7 @@ fun GradeDetailsDialog(
         }
     }
 
-    val weightStr = if (grade.weight % 1.0 == 0.0) grade.weight.toInt().toString() else "${grade.weight}"
+    val weightStr = formatGradeWeight(grade.weight)
 
     AlertDialog(
         onDismissRequest = onDismiss,

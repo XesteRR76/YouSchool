@@ -202,4 +202,18 @@ class CalculationUnitTest {
         // Score MUST increase from 3.00 to 4.33, NOT decrease
         assertTrue(projectedAfterExclusion > baselineScore)
     }
+
+    @Test
+    fun testFormatGradeWeightDoesNotRoundToOneDecimalPlace() {
+        assertEquals("1", org.youschool.app.ui.screens.grades.formatGradeWeight(1.0))
+        assertEquals("2", org.youschool.app.ui.screens.grades.formatGradeWeight(2.0))
+        assertEquals("1.25", org.youschool.app.ui.screens.grades.formatGradeWeight(1.25))
+        assertEquals("0.5", org.youschool.app.ui.screens.grades.formatGradeWeight(0.5))
+        assertEquals("1.75", org.youschool.app.ui.screens.grades.formatGradeWeight(1.75))
+        assertEquals("1.3", org.youschool.app.ui.screens.grades.formatGradeWeight(1.3))
+        assertEquals("1.125", org.youschool.app.ui.screens.grades.formatGradeWeight(1.125))
+        // Floating point jitter protection
+        assertEquals("0.3", org.youschool.app.ui.screens.grades.formatGradeWeight(0.30000000000000004))
+        assertEquals("1.25", org.youschool.app.ui.screens.grades.formatGradeWeight(1.2500000000000002))
+    }
 }

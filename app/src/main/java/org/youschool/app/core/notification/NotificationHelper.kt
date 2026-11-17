@@ -14,6 +14,7 @@ import org.youschool.app.MainActivity
 import org.youschool.app.R
 import org.youschool.app.core.database.entities.GradeEntity
 import org.youschool.app.ui.screens.grades.formatGradeDisplayDate
+import org.youschool.app.ui.screens.grades.formatGradeWeight
 import java.util.Locale
 
 object NotificationHelper {
@@ -116,11 +117,7 @@ object NotificationHelper {
             val grade = newGrades.first()
             val title = "Новая оценка: ${grade.subject} (${grade.markVal})"
             val lessonDay = formatGradeDisplayDate(grade.lessonDate)
-            val weightStr = if (grade.weight % 1.0 == 0.0) {
-                grade.weight.toInt().toString()
-            } else {
-                String.format(Locale.US, "%.1f", grade.weight)
-            }
+            val weightStr = formatGradeWeight(grade.weight)
 
             val body = buildString {
                 if (grade.workType.isNotBlank()) append(grade.workType)
@@ -145,7 +142,7 @@ object NotificationHelper {
                 .setBigContentTitle(title)
 
             newGrades.forEach { g ->
-                val weightStr = if (g.weight % 1.0 == 0.0) g.weight.toInt().toString() else "${g.weight}"
+                val weightStr = formatGradeWeight(g.weight)
                 val type = if (g.workType.isNotBlank()) g.workType else "Урок"
                 inbox.addLine("${g.subject}: ${g.markVal} (вес $weightStr, $type)")
             }

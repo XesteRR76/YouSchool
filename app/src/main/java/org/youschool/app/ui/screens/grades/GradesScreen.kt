@@ -36,6 +36,8 @@ import org.youschool.app.domain.repository.SchoolRepository
 import org.youschool.app.ui.screens.schedule.GradeBadge
 import org.youschool.app.ui.theme.LocalBottomBarPadding
 import org.youschool.app.ui.util.rememberHaptic
+import java.math.BigDecimal
+import java.math.RoundingMode
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -656,11 +658,7 @@ fun NewGradeDismissibleItem(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                val gradeWeightStr = if (grade.weight % 1.0 == 0.0) {
-                    grade.weight.toInt().toString()
-                } else {
-                    String.format(Locale.US, "%.1f", grade.weight)
-                }
+                val gradeWeightStr = formatGradeWeight(grade.weight)
                 val subtitleText = buildString {
                     append("Вес: $gradeWeightStr")
                     if (grade.typeName.isNotBlank() && grade.typeName.length <= 30 && !grade.typeName.contains(".")) {
@@ -783,6 +781,13 @@ fun formatGradeDisplayDate(isoDate: String): String {
     }
 }
 
+fun formatGradeWeight(weight: Double): String {
+    if (weight % 1.0 == 0.0) {
+        return weight.toInt().toString()
+    }
+    return BigDecimal.valueOf(weight).setScale(3, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString()
+}
+
 @Composable
 fun SubjectGradeCard(
     item: SubjectAverage,
@@ -818,11 +823,7 @@ fun SubjectGradeCard(
     }
     val delta = displayAverage - item.averageScore
 
-    val weightStr = if (displayTotalWeight % 1.0 == 0.0) {
-        displayTotalWeight.toInt().toString()
-    } else {
-        String.format(Locale.US, "%.1f", displayTotalWeight)
-    }
+    val weightStr = formatGradeWeight(displayTotalWeight)
 
     Card(
         modifier = Modifier
@@ -1052,11 +1053,7 @@ fun SubjectGradeCard(
                     } else {
                         grades.forEach { g ->
                             val isExcluded = simulation?.excludedGradeKeys?.contains(g.id) == true
-                            val gradeWeightStr = if (g.weight % 1.0 == 0.0) {
-                                g.weight.toInt().toString()
-                            } else {
-                                String.format(Locale.US, "%.1f", g.weight)
-                            }
+                            val gradeWeightStr = formatGradeWeight(g.weight)
                             val lessonDay = formatGradeDisplayDate(g.lessonDate)
                             val primaryDateStr = if (lessonDay.isNotBlank()) "Урок: $lessonDay" else formatGradeDisplayDate(g.date)
                             val postingInfo = formatMarkPostingInfo(g.lessonDate, g.date)

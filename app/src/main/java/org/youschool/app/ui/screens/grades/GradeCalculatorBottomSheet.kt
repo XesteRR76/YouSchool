@@ -259,11 +259,7 @@ fun GradeCalculatorBottomSheet(
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        val weightFormatted = if (projectedTotalWeight % 1.0 == 0.0) {
-                            projectedTotalWeight.toInt().toString()
-                        } else {
-                            String.format(Locale.US, "%.1f", projectedTotalWeight)
-                        }
+                        val weightFormatted = formatGradeWeight(projectedTotalWeight)
 
                         Text(
                             text = "Итого оценок: $totalCount • Суммарный вес: $weightFormatted",
@@ -470,7 +466,7 @@ fun GradeCalculatorBottomSheet(
                         ) {
                             Icon(Icons.Rounded.Add, contentDescription = null)
                             Spacer(modifier = Modifier.width(8.dp))
-                            val wStr = if (finalWeight % 1.0 == 0.0) "${finalWeight.toInt()}" else "$finalWeight"
+                            val wStr = formatGradeWeight(finalWeight)
                             Text("Добавить оценку $finalMarkDisplay (вес $wStr)")
                         }
                     }
@@ -504,7 +500,7 @@ fun GradeCalculatorBottomSheet(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 GradeBadge(mark = sim.displayValue, weight = sim.weight)
                                 Spacer(modifier = Modifier.width(12.dp))
-                                val wStr = if (sim.weight % 1.0 == 0.0) "${sim.weight.toInt()}" else "${sim.weight}"
+                                val wStr = formatGradeWeight(sim.weight)
                                 Text(
                                     text = "Добавлена • Вес: $wStr",
                                     style = MaterialTheme.typography.bodyMedium,
@@ -561,11 +557,7 @@ fun GradeCalculatorBottomSheet(
             } else {
                 items(evaluableGrades, key = { it.id }) { grade ->
                     val isExcluded = grade.id in excludedGradeKeys
-                    val gradeWeightStr = if (grade.weight % 1.0 == 0.0) {
-                        grade.weight.toInt().toString()
-                    } else {
-                        String.format(Locale.US, "%.1f", grade.weight)
-                    }
+                    val gradeWeightStr = formatGradeWeight(grade.weight)
                     val lessonDay = formatGradeDisplayDate(grade.lessonDate)
                     val primaryDateStr = if (lessonDay.isNotBlank()) "Урок: $lessonDay" else formatGradeDisplayDate(grade.date)
                     val postingInfo = formatMarkPostingInfo(grade.lessonDate, grade.date)
