@@ -794,10 +794,13 @@ fun SubjectGradeCard(
     onResetSimulation: () -> Unit = {}
 ) {
     val hasSimulation = simulation?.isActive == true
+    val evaluableGrades = remember(grades) {
+        grades.filter { it.numericValue > 0.0 }
+    }
     val activeRealGrades = if (hasSimulation) {
-        grades.filter { it.id !in (simulation?.excludedGradeKeys ?: emptySet()) }
+        evaluableGrades.filter { it.id !in (simulation?.excludedGradeKeys ?: emptySet()) }
     } else {
-        grades
+        evaluableGrades
     }
     val simulatedGrades = simulation?.simulatedGrades ?: emptyList()
 

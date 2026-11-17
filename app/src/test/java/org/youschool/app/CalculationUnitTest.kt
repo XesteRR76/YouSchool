@@ -143,4 +143,63 @@ class CalculationUnitTest {
         val postingInfoSame = org.youschool.app.ui.screens.grades.formatMarkPostingInfo(lessonDate, markDateSameDay)
         assertEquals("Поставлена в 14:20", postingInfoSame)
     }
+
+    @Test
+    fun testGradeCalculatorExclusionWithNonNumericMarks() {
+        val allGrades = listOf(
+            org.youschool.app.domain.model.Grade(
+                id = "1", lessonId = 1L, subjectName = "Алгебра", value = "5", numericValue = 5.0, weight = 1.0,
+                date = "2026-11-10", typeName = "Ответ на уроке", teacherName = "Учитель"
+            ),
+            org.youschool.app.domain.model.Grade(
+                id = "2", lessonId = 2L, subjectName = "Алгебра", value = "4", numericValue = 4.0, weight = 1.0,
+                date = "2026-11-11", typeName = "Ответ на уроке", teacherName = "Учитель"
+            ),
+            org.youschool.app.domain.model.Grade(
+                id = "3", lessonId = 3L, subjectName = "Алгебра", value = "4", numericValue = 4.0, weight = 1.0,
+                date = "2026-11-12", typeName = "Ответ на уроке", teacherName = "Учитель"
+            ),
+            org.youschool.app.domain.model.Grade(
+                id = "4", lessonId = 4L, subjectName = "Алгебра", value = "1", numericValue = 1.0, weight = 1.0,
+                date = "2026-11-13", typeName = "Самостоятельная", teacherName = "Учитель"
+            ),
+            org.youschool.app.domain.model.Grade(
+                id = "5", lessonId = 5L, subjectName = "Алгебра", value = "1", numericValue = 1.0, weight = 1.0,
+                date = "2026-11-14", typeName = "Самостоятельная", teacherName = "Учитель"
+            ),
+            // Non-numeric marks (absence "Н") with assigned weights
+            org.youschool.app.domain.model.Grade(
+                id = "6", lessonId = 6L, subjectName = "Алгебра", value = "Н", numericValue = 0.0, weight = 1.0,
+                date = "2026-11-15", typeName = "Пропуск", teacherName = "Учитель"
+            ),
+            org.youschool.app.domain.model.Grade(
+                id = "7", lessonId = 7L, subjectName = "Алгебра", value = "Н", numericValue = 0.0, weight = 2.0,
+                date = "2026-11-16", typeName = "Контрольная", teacherName = "Учитель"
+            )
+        )
+
+        val evaluable = allGrades.filter { it.numericValue > 0.0 }
+        assertEquals(5, evaluable.size)
+
+        // Baseline: (5 + 4 + 4 + 1 + 1) / 5 = 15 / 5 = 3.00
+        val baselineScore = evaluable.sumOf { it.numericValue * it.weight } / evaluable.sumOf { it.weight }
+        assertEquals(3.0, baselineScore, 0.001)
+
+        // Without exclusion: projected average must equal baseline score
+        val initialActive = evaluable.filter { it.id !in emptySet<String>() }
+        val initialProjected = initialActive.sumOf { it.numericValue * it.weight } / initialActive.sumOf { it.weight }
+        assertEquals(baselineScore, initialProjected, 0.001)
+
+        // Exclude the two 1s (id "4" and "5")
+        val excludedIds = setOf("4", "5")
+        val activeAfterExclusion = evaluable.filter { it.id !in excludedIds }
+        assertEquals(3, activeAfterExclusion.size)
+
+        val projectedAfterExclusion = activeAfterExclusion.sumOf { it.numericValue * it.weight } / activeAfterExclusion.sumOf { it.weight }
+        // (5 + 4 + 4) / 3 = 13 / 3 = 4.333...
+        assertEquals(4.333, projectedAfterExclusion, 0.001)
+
+        // Score MUST increase from 3.00 to 4.33, NOT decrease
+        assertTrue(projectedAfterExclusion > baselineScore)
+    }
 }

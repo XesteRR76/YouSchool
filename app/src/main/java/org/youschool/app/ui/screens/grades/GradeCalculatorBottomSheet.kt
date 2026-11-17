@@ -76,9 +76,12 @@ fun GradeCalculatorBottomSheet(
         onSimulationChange(SubjectSimulation(newSim, newExcluded))
     }
 
-    // Active real grades (not excluded)
-    val activeRealGrades = remember(grades, excludedGradeKeys) {
-        grades.filter { it.id !in excludedGradeKeys }
+    // Active real grades (only evaluable numeric grades with numericValue > 0 count towards academic average)
+    val evaluableGrades = remember(grades) {
+        grades.filter { it.numericValue > 0.0 }
+    }
+    val activeRealGrades = remember(evaluableGrades, excludedGradeKeys) {
+        evaluableGrades.filter { it.id !in excludedGradeKeys }
     }
 
     // Baseline calculation
@@ -535,7 +538,7 @@ fun GradeCalculatorBottomSheet(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        text = "Текущие оценки (${grades.size})",
+                        text = "Текущие оценки (${evaluableGrades.size})",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold
                     )
@@ -547,7 +550,7 @@ fun GradeCalculatorBottomSheet(
                 }
             }
 
-            if (grades.isEmpty()) {
+            if (evaluableGrades.isEmpty()) {
                 item {
                     Text(
                         text = "Оценок пока нет",
@@ -556,7 +559,7 @@ fun GradeCalculatorBottomSheet(
                     )
                 }
             } else {
-                items(grades, key = { it.id }) { grade ->
+                items(evaluableGrades, key = { it.id }) { grade ->
                     val isExcluded = grade.id in excludedGradeKeys
                     val gradeWeightStr = if (grade.weight % 1.0 == 0.0) {
                         grade.weight.toInt().toString()

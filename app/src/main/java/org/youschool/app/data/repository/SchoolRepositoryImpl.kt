@@ -164,20 +164,19 @@ class SchoolRepositoryImpl(
         return database.gradeDao().getAllGrades().map { entities ->
             val grouped = entities.groupBy { it.subject }
             grouped.map { (subject, grades) ->
+                val evaluableGrades = grades.filter { it.markNum > 0 }
                 var totalWeightedScore = 0.0
                 var totalWeight = 0.0
-                for (g in grades) {
-                    if (g.markNum > 0) {
-                        totalWeightedScore += g.markNum * g.weight
-                        totalWeight += g.weight
-                    }
+                for (g in evaluableGrades) {
+                    totalWeightedScore += g.markNum * g.weight
+                    totalWeight += g.weight
                 }
                 val avg = if (totalWeight > 0) totalWeightedScore / totalWeight else 0.0
 
                 SubjectAverage(
                     subjectName = subject,
                     averageScore = avg,
-                    gradesCount = grades.size,
+                    gradesCount = evaluableGrades.size,
                     totalWeight = totalWeight
                 )
             }.sortedBy { it.subjectName }
