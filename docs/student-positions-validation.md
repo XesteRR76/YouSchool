@@ -5,15 +5,16 @@ Only positions with `posTypeCode = S` are selectable. Parent and teacher feature
 
 ## Local checks
 
-- All main Kotlin sources compile with the cached Kotlin 2.0 compiler, Compose and serialization plugins, and Android SDK classpath.
-- All 40 JVM tests pass, including 13 position filtering, restoration, and cancellation regressions.
-- Android instrumentation test sources compile, including Room migration/isolation, synthetic session protocol, and Compose chooser tests.
+Verified using Gradle with JDK 17 and Android SDK Build Tools 34.0.0:
+
+- `testDebugUnitTest`: all 40 tests pass, including 13 position filtering, restoration, and cancellation regressions.
+- `lintDebug`: passes.
+- `assembleDebug`: produces `app/build/outputs/apk/debug/youschool_0.3.10.apk`.
+- `assembleDebugAndroidTest`: builds the Room migration/isolation, synthetic session protocol, and Compose chooser tests.
+- Room KSP generation and compilation complete successfully.
 - `git diff --check` and the UI source detector pass.
 
-Direct compiler checks do not execute Room's KSP processor or replace an Android build.
-The managed shell rejects Gradle's local socket with `java.net.SocketException: Operation not permitted`.
-Consequently local Gradle unit-test task execution, lint, APK assembly, emulator screenshots, and instrumentation execution remain unverified.
-The included `Validate student position switching` workflow is prepared to run those tasks and retain reports and the debug APK as an artifact. It has not run: the GitHub integration rejected publishing to the fork with `403 Resource not accessible by integration`; shell Git transport cannot resolve GitHub, and no browser host is available.
+The earlier sandbox socket and GitHub publishing restrictions have been resolved. The branch is published and draft PR #5 is open. The `Validate student position switching` workflow is running on GitHub, including emulator instrumentation tests; their execution is not yet confirmed by these local checks.
 
 ## Synthetic coverage
 
